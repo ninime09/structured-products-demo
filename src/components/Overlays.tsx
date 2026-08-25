@@ -261,19 +261,17 @@ export function Drawer() {
                   <section className="skill-example"><span>{zh ? '示例指令' : 'Example instruction'}</span><strong>“{selectedSkill.example}”</strong></section>
                 </div>
                 {SKILL_MANIFESTS[selectedSkill.id] ? (
-                  <div className="skill-manifest">
-                    <div className="skill-manifest-head">
-                      <span>Manifest · {zh ? '治理元数据（注册表审批依据）' : 'Governance (registry approval basis)'}</span>
-                      <Tag tone="primary">v{SKILL_MANIFESTS[selectedSkill.id].version}</Tag>
-                      <Tag tone="success">{zh ? '审批' : 'Approved'} · {SKILL_MANIFESTS[selectedSkill.id].approvedBy}</Tag>
-                    </div>
+                  <details className="skill-manifest">
+                    <summary>
+                      {zh ? '治理信息' : 'Governance'} · v{SKILL_MANIFESTS[selectedSkill.id].version} · {zh ? '合规已审批' : 'compliance approved'}（{SKILL_MANIFESTS[selectedSkill.id].approvedBy}）
+                    </summary>
                     <div className="skill-manifest-grid">
                       <div><span>reads</span><code>{SKILL_MANIFESTS[selectedSkill.id].reads.join('  ·  ')}</code><small>{zh ? '默认拒绝，声明即上限' : 'deny by default'}</small></div>
                       <div><span>writes</span><code>{SKILL_MANIFESTS[selectedSkill.id].writes.join('  ·  ')}</code><small>{zh ? '只出草稿' : 'drafts only'}</small></div>
                       <div><span>can_trigger_transition</span><code className="deny">false</code><small>{zh ? '正式流转必须人确认' : 'formal transitions need human confirmation'}</small></div>
                       <div><span>eval</span><code>{SKILL_MANIFESTS[selectedSkill.id].evalNote}</code><small>{zh ? '升版本门禁' : 'version gate'}</small></div>
                     </div>
-                  </div>
+                  </details>
                 ) : null}
                 <div className="skill-detail-actions">
                   {!installedSkillIds.includes(selectedSkill.id) ? (
