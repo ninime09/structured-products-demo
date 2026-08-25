@@ -45,7 +45,13 @@ export function PrivateSidebar() {
               ) : null}
               <div className="ps-bubble">{m.text}</div>
               {m.draft ? (
-                <div className={`ps-draft${m.draft.published ? ' published' : ''}`}>
+                <div
+                  className={`ps-draft${m.draft.published ? ' published' : ''}`}
+                  draggable={!m.draft.published}
+                  title={m.draft.published ? undefined : '按住拖到左侧交易室 → 发布（需确认）'}
+                  onDragStart={m.draft.published ? undefined : (e) => { e.dataTransfer.setData('text/plain', m.id); e.dataTransfer.effectAllowed = 'move'; store.setDragging({ kind: 'draft', id: m.id }) }}
+                  onDragEnd={() => store.setDragging(null)}
+                >
                   <div className="ps-draft-label">{m.draft.kind === 'deviation' ? '草稿 · 流程偏离请求' : '草稿 · 交易室消息'}</div>
                   <p>{m.draft.text}</p>
                   {m.draft.published ? (

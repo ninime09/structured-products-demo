@@ -2344,3 +2344,13 @@ button:disabled { cursor: not-allowed; }
 .ps-input button { border: 0; background: #6b4fae; color: #fff; border-radius: 9px; width: 36px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .private-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; border: 1px dashed #b9a7e6; background: #faf8ff; color: #6b4fae; font-size: 12px; font-weight: 600; border-radius: 16px; padding: 3px 12px; cursor: pointer; }
 .private-toggle:hover { background: #f3effc; }
+
+/* 双向拖拽投放区 */
+.trade-main { position: relative; }
+.drop-zone { display: flex; align-items: center; justify-content: center; border: 2.5px dashed #6b4fae; background: rgba(107, 79, 174, 0.09); color: #6b4fae; font-weight: 700; font-size: 14.5px; border-radius: 14px; z-index: 80; pointer-events: auto; }
+.drop-zone span { background: #faf8ff; border: 1px solid #cbbcec; border-radius: 10px; padding: 10px 18px; box-shadow: 0 4px 18px rgba(107, 79, 174, 0.18); }
+.right-drop { position: fixed; top: 66px; right: 8px; bottom: 8px; width: 384px; }
+.room-drop { position: absolute; inset: 12px; }
+.stage-card-head[draggable="true"] { cursor: grab; }
+.stage-card-head[draggable="true"]:active { cursor: grabbing; }
+.ps-draft[draggable="true"] { cursor: grab; }

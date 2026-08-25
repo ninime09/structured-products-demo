@@ -194,7 +194,7 @@ function TradeComposer() {
 }
 
 export function TradeRoom() {
-  const { timeline, activeCaseId, truth, role, focusArtifactId, artifacts, participants, language } = useEngine()
+  const { timeline, activeCaseId, truth, role, focusArtifactId, artifacts, participants, language, dragging } = useEngine()
   const zh = language === 'zh'
   const endRef = useRef<HTMLDivElement>(null)
   const lastLen = useRef(timeline.length)
@@ -238,6 +238,15 @@ export function TradeRoom() {
 
   return (
     <main className="main trade-main">
+      {dragging?.kind === 'draft' ? (
+        <div
+          className="drop-zone room-drop"
+          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
+          onDrop={(e) => { e.preventDefault(); store.dropDraftToRoom(dragging.id) }}
+        >
+          <span>松手 · 发布到交易室（将弹出确认）</span>
+        </div>
+      ) : null}
       <div className="main-inner">
         <div className="trade-scroll-content">
         <div className="trade-room-heading"><MessageSquare size={16} /><strong>{zh ? '交易室' : 'Trade Room'}</strong><ChevronDown size={15} />{sourceReview ? <span className="room-mode">{zh ? '来源核对' : 'Source Review'}</span> : null}<button className="private-toggle" title="私有工作区：和你的 agent 私下讨论，发布后才进入交易室" onClick={() => store.togglePrivate()}><Sparkles size={13} />{zh ? '私有工作区' : 'Private'}</button></div>

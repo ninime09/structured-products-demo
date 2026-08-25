@@ -48,6 +48,7 @@ export interface EngineState {
   privateOpen: boolean
   privateChats: Record<RoleKey, PrivateMsg[]>
   pendingDraftId: string | null
+  dragging: { kind: 'artifact' | 'draft'; id: string } | null
 }
 
 type Listener = () => void
@@ -264,6 +265,7 @@ function initialState(): EngineState {
     privateOpen: false,
     privateChats: { rm: [], ps: [], dealer: [], ops: [] },
     pendingDraftId: null,
+    dragging: null,
   }
 }
 
@@ -558,6 +560,20 @@ class Store {
     }
   }
   // ── 私有工作区（两区模型）────────────────────────────────────────────
+  setDragging(d: { kind: 'artifact' | 'draft'; id: string } | null) {
+    this.set({ dragging: d })
+  }
+  /** 拖拽版反向门：产物落入右侧投放区 → 拉入私区 */
+  dropArtifactToPrivate(artifactId: string) {
+    this.set({ dragging: null })
+    this.pullIntoPrivate(artifactId)
+  }
+  /** 拖拽版正向门：草稿落入交易室投放区 → 弹发布确认（跨界仍须显式确认） */
+  dropDraftToRoom(msgId: string) {
+    this.set({ dragging: null })
+    this.publishDraft(msgId)
+  }
+
   togglePrivate(open?: boolean) {
     this.set({ privateOpen: open ?? !this.state.privateOpen })
   }

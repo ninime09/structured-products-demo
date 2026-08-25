@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
-import { useEngine } from './hooks'
+import { store, useEngine } from './hooks'
 import { AssistantView, TasksView } from './components/Assistant'
 import { ConfirmModal, Drawer, HandoffToast } from './components/Overlays'
 import { AppHeader, CaseDetailsPanel, LeftNav } from './components/Shell'
@@ -18,7 +18,7 @@ function clampNavWidth(width: number) {
 }
 
 export default function App() {
-  const { view, activeCaseId, detailsCollapsed, role, participants, privateOpen } = useEngine()
+  const { view, activeCaseId, detailsCollapsed, role, participants, privateOpen, dragging } = useEngine()
   const [navWidth, setNavWidth] = useState(() => {
     if (typeof window === 'undefined') return NAV_DEFAULT_WIDTH
     const stored = Number(window.localStorage.getItem(NAV_WIDTH_KEY))
@@ -80,6 +80,15 @@ export default function App() {
       )}
       {view === 'room' ? <TradeRoom /> : view === 'assistant' ? <AssistantView /> : <TasksView />}
       {showCaseDetails ? (privateOpen ? <PrivateSidebar /> : <CaseDetailsPanel />) : <div />}
+      {dragging?.kind === 'artifact' ? (
+        <div
+          className="drop-zone right-drop"
+          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }}
+          onDrop={(e) => { e.preventDefault(); store.dropArtifactToPrivate(dragging.id) }}
+        >
+          <span>松手 · 拉入私有工作区讨论</span>
+        </div>
+      ) : null}
       <Drawer />
       <ConfirmModal />
       <HandoffToast />

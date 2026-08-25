@@ -48,6 +48,7 @@ function StageCard({
   children,
   footer,
   className = '',
+  dragArtifactId,
 }: {
   icon?: React.ReactNode
   title: string
@@ -56,10 +57,18 @@ function StageCard({
   children: React.ReactNode
   footer?: React.ReactNode
   className?: string
+  /** 传入产物 id 后卡片标题栏可拖起，拖入右侧私有工作区（反向门） */
+  dragArtifactId?: string
 }) {
   return (
     <section className={`stage-card ${className}`.trim()}>
-      <header className="stage-card-head">
+      <header
+        className="stage-card-head"
+        draggable={!!dragArtifactId}
+        title={dragArtifactId ? '按住拖到右侧 → 拉入私有工作区讨论' : undefined}
+        onDragStart={dragArtifactId ? (e) => { e.dataTransfer.setData('text/plain', dragArtifactId); e.dataTransfer.effectAllowed = 'copy'; store.setDragging({ kind: 'artifact', id: dragArtifactId }) } : undefined}
+        onDragEnd={dragArtifactId ? () => store.setDragging(null) : undefined}
+      >
         <span className="stage-card-icon">{icon}</span>
         <strong>{title}</strong>
         {subtitle ? <span className="stage-card-subtitle">{subtitle}</span> : null}
@@ -103,7 +112,7 @@ export function StructureWorkspace() {
     <div className="stage-workspace structure-workspace">
       <StageEvent time="14:08"><b>Client need approved by Alice</b><span>Tencent · USD 1M · 6M · target &gt;10%</span></StageEvent>
       <StageEvent time="14:09" tone="progress"><b>David joins Structuring</b><span>AI prepared three comparable structures for expert review</span></StageEvent>
-      <StageCard title="Structure Proposal" subtitle="Product Specialist decision workspace" status={<StatusBadge status={artifact.status} />} className="structure-stage-card"
+      <StageCard dragArtifactId={artifact.id} title="Structure Proposal" subtitle="Product Specialist decision workspace" status={<StatusBadge status={artifact.status} />} className="structure-stage-card"
         footer={<StageActionBar source="Approved Client Need · 14:08">
           {!kiModified ? <ActionBtn label="Adjust KI 70% → 65%" kind="secondary" allowed={['ps']} role={role} onClick={() => store.modifyKI()} /> : null}
           <ActionBtn label="Approve Structure" kind="primary" allowed={FCN_WORKFLOW.approveStructure.allowedRoles} role={role} onClick={() => confirmThen({ key: 'approveStructure', title: 'Approve Structure', summary: [`${selected.label} · ${selected.productType} ${selected.tenor}`, `Strike ${selected.strike} · KI ${selected.knockIn}`, `Autocall ${selected.autocall}`, `Coupon target ${selected.couponTarget}`], consequence: 'The selected terms become the approved structure. AI will prepare the RFQ package and hand the case to Dealer.', confirmLabel: 'Approve Structure' })} />
@@ -202,6 +211,7 @@ export function RFQWorkspace() {
       </div>
       <StageEvent time="14:16"><b>Approved Structure Proposal</b><span>方案 B · 均衡型 · KI {fv('Knock-In')} · Strike {fv('Strike')}</span></StageEvent>
       <StageCard
+        dragArtifactId={artifact.id}
         title="RFQ Package"
         subtitle="Dealer review before market pricing"
         status={<StatusBadge status={artifact.status} />}
@@ -238,6 +248,7 @@ export function QuoteMatrixWorkspace() {
       <StageEvent time="14:17"><b>RFQ accepted and released</b><span>JPM · UBS · Morgan Stanley · Goldman Sachs · BNP</span></StageEvent>
       <StageEvent time="14:22" tone="progress"><b>4 issuer responses normalized</b><span>1 non-comparable · 1 no response</span></StageEvent>
       <StageCard
+        dragArtifactId={artifact.id}
         title="Quote Matrix"
         subtitle="Market pricing comparison"
         status={<><Tag tone="success">4 responses</Tag><Tag tone="warning">1 different terms</Tag></>}
@@ -289,7 +300,7 @@ export function ClientQuoteWorkspace() {
     <div className="stage-workspace client-quote-workspace">
       <StageEvent time="14:23"><b>Morgan Stanley selected</b><span>Best comparable quote · {tv('Coupon')}</span></StageEvent>
       <StageEvent time="14:24" tone="progress"><b>Client language prepared</b><span>Risk explanation and message draft generated for RM review</span></StageEvent>
-      <StageCard title="Client Quote Card" subtitle="RM review before external communication" status={<StatusBadge status={artifact.status} />} className="client-quote-stage-card"
+      <StageCard dragArtifactId={artifact.id} title="Client Quote Card" subtitle="RM review before external communication" status={<StatusBadge status={artifact.status} />} className="client-quote-stage-card"
         footer={<StageActionBar source="Quote Matrix · MS best comparable quote">
           <ActionBtn label="Request Updated Quote" kind="ghost" allowed={FCN_WORKFLOW.requestRequote.allowedRoles} role={role} onClick={() => confirmThen({ key: 'requestRequote', title: 'Request Updated Quote', summary: ['Return to market pricing', 'Request a fresh quote'], consequence: 'The current client quote will no longer be used.', confirmLabel: 'Request updated quote' })} />
           <ActionBtn label="Back to Quote Matrix" kind="secondary" allowed={['rm', 'dealer']} role={role} onClick={() => store.openDrawer({ type: 'source', payload: { title: 'Quote Matrix', meta: 'Selected quote evidence', body: 'Morgan Stanley was selected as the best comparable quote at 14:23.' } })} />
@@ -341,7 +352,7 @@ export function ExecutionWorkspace() {
     <div className="stage-workspace execution-workspace">
       <StageEvent time="14:38"><b>Client instruction confirmed by Alice</b><span>Formal instruction record created</span></StageEvent>
       <StageEvent time={d.quoteTime} tone="progress"><b>Live quote received from Morgan Stanley</b><span>Execution ticket refreshed</span></StageEvent>
-      <StageCard title="Execution Ticket Draft" subtitle="Dealer review · formal execution" status={<StatusBadge status={artifact.status} />} className="execution-stage-card"
+      <StageCard dragArtifactId={artifact.id} title="Execution Ticket Draft" subtitle="Dealer review · formal execution" status={<StatusBadge status={artifact.status} />} className="execution-stage-card"
         footer={<StageActionBar source="Confirmed Client Instruction + MS live quote">
           <ActionBtn label="Request Live Requote" kind="ghost" allowed={FCN_WORKFLOW.requestLiveRequote.allowedRoles} role={role} onClick={() => confirmThen({ key: 'requestLiveRequote', title: 'Request Live Requote', summary: ['Request final live price from Morgan Stanley', 'Refresh execution ticket'], consequence: 'Execution remains blocked until a valid quote is available.', confirmLabel: 'Request live requote' })} />
           <Button variant="secondary">Back to Client Instruction</Button>
@@ -373,7 +384,7 @@ export function TermsheetWorkspace() {
       <StageEvent time="14:41"><b>Trade executed with Morgan Stanley</b><span>Execution record locked</span></StageEvent>
       <StageEvent time="14:52" tone="progress"><b>Issuer term sheet received</b><span>AI validation found {mismatch ? '1 mismatch' : 'no mismatches'}</span></StageEvent>
       <div className="ai-assessment-banner"><Route size={19} /><div><span>AI Exception Assessment</span><strong>{mismatch ? 'Documentation Error · Medium severity' : 'No exception detected'}</strong><p>{mismatch ? 'Issuer term sheet differs from the executed settlement term. Client instruction and execution record remain aligned.' : 'All final terms match the execution record.'}</p></div><Tag tone={mismatch ? 'warning' : 'success'}>{mismatch ? 'Review required' : 'Validated'}</Tag></div>
-      <StageCard title="Term Sheet Validation" subtitle="Execution record vs issuer document" status={<StatusBadge status={artifact.status} />} className="termsheet-stage-card"
+      <StageCard dragArtifactId={artifact.id} title="Term Sheet Validation" subtitle="Execution record vs issuer document" status={<StatusBadge status={artifact.status} />} className="termsheet-stage-card"
         footer={<StageActionBar source="Execution Ticket · 14:41 + MS Final Term Sheet · 14:52">
           <ActionBtn label="拉入私区讨论" kind="ghost" allowed={['rm', 'ps', 'dealer', 'ops']} role={role} onClick={() => store.pullIntoPrivate(artifact.id)} />
           {inException ? <ActionBtn label="Resolve Exception" kind="primary" allowed={FCN_WORKFLOW.resolveException.allowedRoles} role={role} onClick={() => confirmThen({ key: 'resolveException', title: 'Resolve Documentation Exception', summary: ['Morgan Stanley confirmed settlement should be T+2', 'Corrected term sheet received'], consequence: 'The case returns to term sheet approval.', confirmLabel: 'Resolve exception' })} /> : mismatch ? <><ActionBtn label="Approve Assessment" kind="secondary" allowed={['ops', 'dealer']} role={role} onClick={() => store.openDrawer({ type: 'source', payload: { title: 'AI Assessment', meta: 'Evidence-backed classification', body: 'Client Instruction and Execution Record both specify T+2. The issuer term sheet alone specifies T+3, so the exception is classified as Documentation Error.' } })} /><ActionBtn label="Request Corrected Term Sheet" kind="primary" allowed={FCN_WORKFLOW.raiseException.allowedRoles} role={role} onClick={() => confirmThen({ key: 'raiseException', title: 'Request Corrected Term Sheet', summary: ['Classification: Documentation Error', 'Settlement T+2 ≠ T+3', 'Owner: Morgan Stanley Documentation'], consequence: 'A documentation exception will be routed to the issuer. Client reconfirmation is not required.', confirmLabel: 'Request corrected term sheet', danger: true })} /></> : <ActionBtn label="Approve Term Sheet" kind="primary" allowed={FCN_WORKFLOW.approveTermsheet.allowedRoles} role={role} onClick={() => confirmThen({ key: 'approveTermsheet', title: 'Approve Term Sheet', summary: ['All fields match the execution ticket', 'Reviewer Mia ≠ executor Ken (segregation of duties)', 'Archive set: client instruction (email + call recording) · execution ticket · final termsheet'], consequence: 'The case will be completed.', confirmLabel: 'Approve term sheet' })} />}
