@@ -535,7 +535,7 @@ function RFQPackage({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
                     `Strike ${fv('Strike')} · KI ${fv('Knock-In')}`,
                     `发送至：${d.issuers.join(' · ')}`,
                   ],
-                  consequence: '确认后将通过既有外部渠道向 5 家发行商发送询价，Case 进入定价阶段。',
+                  consequence: '确认后将通过标准询价接口向 5 家发行商发起询价（结构化返回，通常数分钟内），Case 进入定价阶段。',
                   confirmLabel: '接受并发送询价',
                 })
               }
@@ -969,7 +969,7 @@ function TermsheetValidation({ artifact, role }: { artifact: Artifact; role: Rol
                 confirmThen({
                   key: 'approveTermsheet',
                   title: '审批条款书 Approve Termsheet',
-                  summary: ['全部字段与执行单一致', 'Notional / Strike / KI / Coupon / Settlement ✓'],
+                  summary: ['全部字段与执行单一致（Notional / Strike / KI / Coupon / Settlement）', '复核人 Mia ≠ 执行人 Ken（职责分离）', '归档材料：客户指令（邮件+录音）· 执行单 · Final Termsheet'],
                   consequence: '审批后 Case 完成（COMPLETED），全流程 audit 记录可在 History 查看。',
                   confirmLabel: '审批条款书',
                 })

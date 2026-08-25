@@ -788,7 +788,7 @@ class Store {
   private doAcceptPricing() {
     const t = setClock('14:18')
     this.updateArtifact('art-rfq', { status: 'ACCEPTED', approvedMeta: `Ken · Dealer · ${t} 接受询价请求` })
-    this.systemEvent('send', '询价已通过既有渠道发出 → JPM · UBS · MS · GS · BNP', `Ken · Dealer · ${t}`)
+    this.systemEvent('send', '询价已通过标准询价接口发出 → JPM · UBS · MS · GS · BNP（结构化请求）', `Ken · Dealer · ${t}`)
     this.formalTransition('acceptPricing', {
       time: t,
       truth: {
@@ -830,7 +830,7 @@ class Store {
         type: 'quoteMatrix',
         quotes,
         bestNote: 'Morgan Stanley 为最优可比报价：可比报价中 coupon 最高，条款与 Approved Structure 一致。',
-        freshnessNote: `UBS 未回复。BNP 条款不可比（KI ${bnp?.ki}），即使 coupon 更高也已单独分区。`,
+        freshnessNote: `报价由标准询价接口返回并自动标准化。UBS 未回复。BNP 条款不可比（KI ${bnp?.ki}），即使 coupon 更高也已单独分区。`,
       },
     }
     this.pushArtifactItem(artifact)
@@ -921,7 +921,7 @@ class Store {
           riskSummary:
             `若腾讯曾跌破 ${ki}（KI）且到期低于 80%（Strike），将按 80% 的价格接入腾讯股票，可能产生本金损失。本产品不保本。`,
           validityUntil: ms?.expiresAt ?? Date.now() + 300 * 1000,
-          internalNote: `MS 为最优可比报价；BNP（${bnpQ?.coupon?.toFixed(2) ?? '10.85'}% / KI ${bnpQ?.ki ?? '—'}）条款不可比，未采用。`,
+          internalNote: `MS 为最优可比报价；BNP（${bnpQ?.coupon?.toFixed(2) ?? '10.85'}% / KI ${bnpQ?.ki ?? '—'}）条款不可比，未采用。客户票息为扣除分销价差后的对客水平（价差登记与复核口径待与交易台确认）。`,
         },
       })
       const m = this.latestMatrix()
@@ -975,9 +975,10 @@ class Store {
               { label: 'Notional', value: 'USD 1,000,000' },
               { label: 'Strike / KI', value: `80% / ${this.approvedKI()}` },
               { label: 'Timing', value: '今日内执行' },
+              { label: 'Confirmation Record', value: '电话录音 rec-20260525-1436 已归档 · 邮件存档' },
             ],
             confidence: 'High · 92%',
-            sourceRef: 'Alice 转述客户消息 · 14:36',
+            sourceRef: 'Alice 转述客户消息 · 14:36 · 电话录音已归档',
           },
         })
         this.patchTruth({
@@ -1292,7 +1293,7 @@ class Store {
   private doApproveTermsheet() {
     const t = setClock('15:00')
     this.updateArtifact('art-tv', { status: 'APPROVED', approvedMeta: `Mia · 簿记 / 核对 · ${t} 审批` })
-    this.systemEvent('check', 'Termsheet 已审批 · Case 完成', `Mia · 簿记 / 核对 · ${t}`, 'success')
+    this.systemEvent('check', 'Termsheet 已审批（复核人 Mia ≠ 执行人 Ken · 职责分离）', `Mia · 簿记 / 核对 · ${t}`, 'success')
     this.formalTransition('approveTermsheet', {
       time: t,
       truth: {
@@ -1301,6 +1302,18 @@ class Store {
         nextAction: '无 · Case 已完成',
         alerts: [],
       },
+    })
+    const t2 = tick(1)
+    this.systemEvent('check', '归档材料齐备：客户指令（邮件+录音）· 执行单 · 发行商 Final Termsheet · 核对记录', `AI 归档完整性检查 · ${t2}`, 'success')
+    const t3 = tick(1)
+    this.systemEvent('send', '交易确认书已生成并发送客户 Mr. Chan · Case 完成', `Alice · RM · ${t3}`, 'success')
+    this.addAudit({
+      time: t3,
+      actor: 'Alice',
+      actorRole: 'RM · 客户经理',
+      action: '交易确认书已发送客户（AI 起草 · RM 确认发送）',
+      priorState: 'COMPLETED',
+      newState: 'COMPLETED',
     })
     this.set({
       archivedCaseIds: this.state.archivedCaseIds.includes('SP-001')
