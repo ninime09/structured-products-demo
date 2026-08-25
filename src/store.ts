@@ -1,4 +1,5 @@
 import { PEOPLE } from './data'
+import { FCN_WORKFLOW } from './config/fcn-pack/workflow'
 import type {
   AppNotification,
   Artifact,
@@ -313,6 +314,37 @@ class Store {
     const rc = [{ id: uid('rc'), text, meta }, ...this.state.truth.recentChanges].slice(0, 5)
     this.patchTruth({ recentChanges: rc })
   }
+
+  /**
+   * 正式流转引擎：五步骨架只写这一遍，具体流转由 FCN_WORKFLOW 表驱动。
+   * 表之外的状态变化（AI 起草、时效标记等）不走这里。
+   */
+  private formalTransition(key: string, opts: { time: string; detail?: string; truth?: Partial<CaseTruth> }) {
+    const rule = FCN_WORKFLOW[key]
+    if (!rule) return
+    if (!rule.allowedRoles.includes(this.state.role)) {
+      console.warn(`[workflow] ${key} blocked: role ${this.state.role} not in`, rule.allowedRoles)
+      return
+    }
+    const actor = PEOPLE[this.state.role]
+    this.addAudit({
+      time: opts.time,
+      actor: actor.name,
+      actorRole: actor.roleLabel,
+      action: rule.auditAction,
+      priorState: this.state.truth.status,
+      newState: rule.to,
+      detail: opts.detail,
+    })
+    this.patchTruth({
+      status: rule.to,
+      statusLabel: rule.toLabel,
+      statusTone: rule.toTone,
+      ...(rule.stage ? { stage: rule.stage } : {}),
+      ...(rule.owner !== undefined ? { currentOwner: rule.owner ? PEOPLE[rule.owner] : null } : {}),
+      ...opts.truth,
+    })
+  }
   private later(ms: number, fn: () => void) {
     const ep = this.epoch
     const t = setTimeout(() => {
@@ -502,8 +534,8 @@ class Store {
       confirmNeed: () => this.doConfirmNeed(),
       approveStructure: () => this.doApproveStructure(),
       acceptPricing: () => this.doAcceptPricing(),
-      returnRFQ: () => this.doLoopToStructure('Dealer 复核 RFQ 后退回：KI 65% 建议复核发行商可行性'),
-      modifyFromPricing: () => this.doLoopToStructure('报价矩阵显示当前结构经济性不足，退回产品专家修改'),
+      returnRFQ: () => this.doLoopToStructure('returnRFQ', 'Dealer 复核 RFQ 后退回：KI 65% 建议复核发行商可行性'),
+      modifyFromPricing: () => this.doLoopToStructure('modifyFromPricing', '报价矩阵显示当前结构经济性不足，退回产品专家修改'),
       requestRequote: () => this.doRequestRequote(),
       prepareClientQuote: () => this.doPrepareClientQuote(),
       sendClientQuote: () => this.doSendClientQuote(),
@@ -578,23 +610,13 @@ class Store {
     this.updateArtifact('art-need', { status: 'APPROVED', approvedMeta: `Alice · RM · ${t} 确认` })
     // David's Context Brief restates this — don't show him the event twice.
     this.systemEvent('check', '客户需求已确认', `Assigned to David · 产品专家 · ${t}`, 'success', ['rm', 'dealer'])
-    this.addAudit({
+    this.formalTransition('confirmNeed', {
       time: t,
-      actor: 'Alice',
-      actorRole: 'RM',
-      action: 'Confirm Client Need',
-      priorState: 'CLIENT_NEED_DRAFT',
-      newState: 'CLIENT_NEED_APPROVED',
-    })
-    this.patchTruth({
-      status: 'CLIENT_NEED_APPROVED',
-      statusLabel: '客户需求已确认',
-      statusTone: 'success',
-      stage: 'structure',
-      currentOwner: PEOPLE.ps,
-      waitingOn: null,
-      nextAction: '等待 AI 生成结构方案',
-      alerts: this.state.truth.alerts.filter((x) => x.id !== 'al-missing'),
+      truth: {
+        waitingOn: null,
+        nextAction: '等待 AI 生成结构方案',
+        alerts: this.state.truth.alerts.filter((x) => x.id !== 'al-missing'),
+      },
     })
     this.addChange('客户需求 Approved', `Alice · RM · ${t}`)
     this.pushContextBrief(
@@ -654,21 +676,10 @@ class Store {
     })
     // Ken's Context Brief restates the approval — keep the event for RM / PS.
     this.systemEvent('check', `结构已审批：${opt.label} · KI ${opt.knockIn} · Strike ${opt.strike}`, `David · 产品专家 · ${t}`, 'success', ['rm', 'ps'])
-    this.addAudit({
+    this.formalTransition('approveStructure', {
       time: t,
-      actor: 'David',
-      actorRole: '产品专家',
-      action: `Approve Structure（${opt.label}）`,
-      priorState: this.state.truth.status,
-      newState: 'STRUCTURE_APPROVED',
-      detail: this.state.kiModified ? 'KI 70% → 65%' : undefined,
-    })
-    this.patchTruth({
-      status: 'STRUCTURE_APPROVED',
-      statusLabel: '结构已确认',
-      statusTone: 'success',
-      stage: 'rfq',
-      currentOwner: PEOPLE.dealer,
+      detail: this.state.kiModified ? `${opt.label} · KI 70% → 65%` : opt.label,
+      truth: {
       waitingOn: null,
       nextAction: '等待 AI 生成 RFQ包',
       approvedTerms: [
@@ -679,6 +690,7 @@ class Store {
         { label: 'KI', value: opt.knockIn },
         { label: 'Autocall', value: opt.autocall },
       ],
+      },
     })
     if (this.state.kiModified) this.addChange('KI 70% → 65%', `Approved by David · ${t}`)
     this.addChange('结构 Approved', `David · 产品专家 · ${t}`)
@@ -742,42 +754,32 @@ class Store {
   }
 
   // ── Loop 11.1 / 11.3: back to structure ────────────────────────────────
-  private doLoopToStructure(reason: string) {
+  private doLoopToStructure(key: 'returnRFQ' | 'modifyFromPricing', reason: string) {
     const t = tick(1)
     this.updateArtifact('art-rfq', { status: 'SUPERSEDED' })
     const qm = this.latestMatrix()
     if (qm) this.updateArtifact(qm.id, { status: 'STALE' })
     this.systemEvent('arrow', '已退回产品专家修改结构', `${reason} · ${t}`, 'warning')
-    this.addAudit({
-      time: t,
-      actor: this.state.role === 'ps' ? 'David' : 'Ken',
-      actorRole: this.state.role === 'ps' ? '产品专家' : 'Dealer',
-      action: 'Return for Modification',
-      priorState: this.state.truth.status,
-      newState: 'STRUCTURE_MODIFICATION_REQUIRED',
-      detail: reason,
-    })
     const a = this.state.artifacts['art-structure']
     if (a) this.updateArtifact('art-structure', { status: 'PENDING APPROVAL', version: a.version + 1, approvedMeta: undefined })
-    this.patchTruth({
-      status: 'STRUCTURE_MODIFICATION_REQUIRED',
-      statusLabel: '待修改结构',
-      statusTone: 'warning',
-      stage: 'structure',
-      currentOwner: PEOPLE.ps,
-      waitingOn: null,
-      nextAction: '产品专家修改结构并重新审批',
-      alerts: [
-        {
-          id: 'al-loop',
-          severity: 'warning',
-          title: '结构需要修改',
-          detail: reason,
-          owner: '产品专家',
-          actions: ['修改结构', '重新审批'],
-        },
-        ...this.state.truth.alerts.filter((x) => x.id !== 'al-loop'),
-      ],
+    this.formalTransition(key, {
+      time: t,
+      detail: reason,
+      truth: {
+        waitingOn: null,
+        nextAction: '产品专家修改结构并重新审批',
+        alerts: [
+          {
+            id: 'al-loop',
+            severity: 'warning',
+            title: '结构需要修改',
+            detail: reason,
+            owner: '产品专家',
+            actions: ['修改结构', '重新审批'],
+          },
+          ...this.state.truth.alerts.filter((x) => x.id !== 'al-loop'),
+        ],
+      },
     })
     this.addChange('RFQ 退回 → 修改结构', t)
   }
@@ -787,22 +789,13 @@ class Store {
     const t = setClock('14:18')
     this.updateArtifact('art-rfq', { status: 'ACCEPTED', approvedMeta: `Ken · Dealer · ${t} 接受询价请求` })
     this.systemEvent('send', '询价已通过既有渠道发出 → JPM · UBS · MS · GS · BNP', `Ken · Dealer · ${t}`)
-    this.addAudit({
+    this.formalTransition('acceptPricing', {
       time: t,
-      actor: 'Ken',
-      actorRole: 'Dealer',
-      action: 'Accept Pricing Request',
-      priorState: 'RFQ_READY',
-      newState: 'PRICING_IN_PROGRESS',
-    })
-    this.patchTruth({
-      status: 'PRICING_IN_PROGRESS',
-      statusLabel: '定价进行中',
-      statusTone: 'progress',
-      stage: 'pricing',
-      waitingOn: 'JPM · UBS · MS · GS · BNP',
-      nextAction: '等待外部发行商返回报价',
-      alerts: this.state.truth.alerts.filter((x) => x.id !== 'al-loop'),
+      truth: {
+        waitingOn: 'JPM · UBS · MS · GS · BNP',
+        nextAction: '等待外部发行商返回报价',
+        alerts: this.state.truth.alerts.filter((x) => x.id !== 'al-loop'),
+      },
     })
     this.addChange('询价已发出（5 家发行商）', t)
     this.later(1500, () => {
@@ -873,20 +866,12 @@ class Store {
     const qm = this.latestMatrix()
     if (qm) this.updateArtifact(qm.id, { status: 'STALE' })
     this.systemEvent('send', '已请求重报 → JPM · UBS · MS · GS · BNP', `Ken · Dealer · ${t}`)
-    this.addAudit({
+    this.formalTransition('requestRequote', {
       time: t,
-      actor: 'Ken',
-      actorRole: 'Dealer',
-      action: 'Request Requote',
-      priorState: 'PRICING_IN_PROGRESS',
-      newState: 'REQUOTE_REQUIRED',
-    })
-    this.patchTruth({
-      status: 'REQUOTE_REQUIRED',
-      statusLabel: '等待重报',
-      statusTone: 'warning',
-      waitingOn: 'JPM · UBS · MS · GS · BNP',
-      nextAction: '等待外部发行商返回新报价',
+      truth: {
+        waitingOn: 'JPM · UBS · MS · GS · BNP',
+        nextAction: '等待外部发行商返回新报价',
+      },
     })
     this.later(2200, () => {
       this.systemEvent('arrow', '收到新一轮报价（4 家，UBS 仍未回复）', tick(2))
@@ -898,13 +883,13 @@ class Store {
   // ── Step 4: Prepare client quote ───────────────────────────────────────
   private doPrepareClientQuote() {
     const t = setClock('14:25')
-    this.addAudit({
+    this.formalTransition('prepareClientQuote', {
       time: t,
-      actor: 'Ken',
-      actorRole: 'Dealer',
-      action: 'Prepare Client Quote（选定 Morgan Stanley）',
-      priorState: 'PRICING_IN_PROGRESS',
-      newState: 'CLIENT_QUOTE_READY',
+      truth: {
+        waitingOn: null,
+        nextAction: 'RM 复核客户报价卡并与客户沟通',
+        alerts: this.state.truth.alerts.filter((alert) => alert.id !== 'al-bnp'),
+      },
     })
     const matrix = this.latestMatrix()
     const ms = matrix?.data.type === 'quoteMatrix' ? matrix.data.quotes.find((q) => q.best) : null
@@ -941,16 +926,6 @@ class Store {
       })
       const m = this.latestMatrix()
       if (m) this.updateArtifact(m.id, { status: 'STALE' })
-      this.patchTruth({
-        status: 'CLIENT_QUOTE_READY',
-        statusLabel: '客户报价已就绪',
-        statusTone: 'progress',
-        stage: 'client',
-        currentOwner: PEOPLE.rm,
-        waitingOn: null,
-        nextAction: 'RM 复核客户报价卡并与客户沟通',
-        alerts: this.state.truth.alerts.filter((alert) => alert.id !== 'al-bnp'),
-      })
       this.addChange('客户报价卡已生成（MS）', ct)
       this.addAudit({
         time: ct,
@@ -968,21 +943,13 @@ class Store {
     const t = setClock('14:27')
     this.updateArtifact('art-cq', { status: 'SENT', approvedMeta: `Alice · RM · ${t} 已与客户沟通` })
     this.systemEvent('send', '客户报价已发送给客户', `Alice · RM · ${t}`)
-    this.addAudit({
+    this.formalTransition('sendClientQuote', {
       time: t,
-      actor: 'Alice',
-      actorRole: 'RM',
-      action: 'Communicate Quote to Client',
-      priorState: 'CLIENT_QUOTE_READY',
-      newState: 'WAITING_FOR_CLIENT',
-    })
-    this.patchTruth({
-      status: 'WAITING_FOR_CLIENT',
-      statusLabel: '等待客户',
-      statusTone: 'progress',
-      currentOwner: PEOPLE.rm,
-      waitingOn: '客户 Mr. Chan',
-      nextAction: '等待客户回复；AI 将识别潜在客户指令',
+      truth: {
+        currentOwner: PEOPLE.rm,
+        waitingOn: '客户 Mr. Chan',
+        nextAction: '等待客户回复；AI 将识别潜在客户指令',
+      },
     })
     this.addChange('报价已发客户', t)
     this.later(2600, () => {
@@ -1035,20 +1002,12 @@ class Store {
     const t = tick(1)
     this.updateArtifact('art-inst', { status: 'STALE', approvedMeta: `Alice · RM · ${t} 驳回 AI 识别结果` })
     this.systemEvent('arrow', 'RM 驳回了 AI 识别的指令，继续等待客户明确指令', `Alice · RM · ${t}`, 'warning')
-    this.addAudit({
+    this.formalTransition('rejectInstruction', {
       time: t,
-      actor: 'Alice',
-      actorRole: 'RM',
-      action: 'Reject Detected Instruction',
-      priorState: 'CLIENT_INSTRUCTION_PENDING_CONFIRMATION',
-      newState: 'WAITING_FOR_CLIENT',
-    })
-    this.patchTruth({
-      status: 'WAITING_FOR_CLIENT',
-      statusLabel: '等待客户',
-      statusTone: 'progress',
-      waitingOn: '客户 Mr. Chan',
-      nextAction: '等待客户明确指令后重新识别',
+      truth: {
+        waitingOn: '客户 Mr. Chan',
+        nextAction: '等待客户明确指令后重新识别',
+      },
     })
     // Client replies again shortly so demo can proceed.
     this.later(2400, () => {
@@ -1082,22 +1041,12 @@ class Store {
     const t = setClock('14:38')
     this.updateArtifact('art-inst', { status: 'CONFIRMED', approvedMeta: `Alice · RM · ${t} 确认为正式客户指令` })
     this.systemEvent('check', '客户指令已确认', `Alice · RM · ${t} · 交给 Ken · Dealer 执行`, 'success')
-    this.addAudit({
+    this.formalTransition('confirmInstruction', {
       time: t,
-      actor: 'Alice',
-      actorRole: 'RM',
-      action: 'Confirm Client Instruction',
-      priorState: 'CLIENT_INSTRUCTION_PENDING_CONFIRMATION',
-      newState: 'CLIENT_INSTRUCTION_CONFIRMED',
-    })
-    this.patchTruth({
-      status: 'CLIENT_INSTRUCTION_CONFIRMED',
-      statusLabel: '客户指令已确认',
-      statusTone: 'success',
-      stage: 'execution',
-      currentOwner: PEOPLE.dealer,
-      waitingOn: null,
-      nextAction: '执行前检查报价时效',
+      truth: {
+        waitingOn: null,
+        nextAction: '执行前检查报价时效',
+      },
     })
     this.addChange('客户指令 Confirmed', `Alice · RM · ${t}`)
     // Force the MS quote & client quote validity to expired for the scripted freshness failure.
@@ -1117,7 +1066,7 @@ class Store {
           detail: '客户确认时 MS 报价已超过有效期。执行前必须向 Morgan Stanley 请求实时最终价格，不能按过期价格成交。',
           actionKey: 'requestLiveRequote',
           actionLabel: '请求实时重报',
-          allowed: ['dealer'],
+          allowed: FCN_WORKFLOW.requestLiveRequote.allowedRoles,
           time: ft,
           done: false,
         })
@@ -1158,15 +1107,10 @@ class Store {
       ),
     })
     this.systemEvent('send', '已向 Morgan Stanley 请求实时最终价格', `Ken · Dealer · ${t}`)
-    this.addAudit({
+    this.formalTransition('requestLiveRequote', {
       time: t,
-      actor: 'Ken',
-      actorRole: 'Dealer',
-      action: 'Request Live Requote',
-      priorState: 'LIVE_REQUOTE_REQUIRED',
-      newState: 'LIVE_REQUOTE_REQUIRED',
+      truth: { waitingOn: 'Morgan Stanley', nextAction: '等待 MS 返回最终价格' },
     })
-    this.patchTruth({ waitingOn: 'Morgan Stanley', nextAction: '等待 MS 返回最终价格' })
     this.later(2000, () => {
       const rt = setClock('14:41')
       this.systemEvent('arrow', 'MS 返回最终价格：Coupon 10.15% · 有效期 10 分钟', rt, 'success')
@@ -1222,22 +1166,12 @@ class Store {
     const t = setClock('14:43')
     this.updateArtifact('art-ticket', { status: 'EXECUTED', approvedMeta: `Ken · Dealer · ${t} 确认并执行` })
     this.systemEvent('check', '交易已执行：MS · FCN 0700.HK · USD 1M · Coupon 10.15%', `Ken · Dealer · ${t}`, 'success')
-    this.addAudit({
+    this.formalTransition('executeTrade', {
       time: t,
-      actor: 'Ken',
-      actorRole: 'Dealer',
-      action: 'Confirm & Execute',
-      priorState: 'EXECUTION_READY',
-      newState: 'EXECUTED',
-    })
-    this.patchTruth({
-      status: 'EXECUTED',
-      statusLabel: '已执行',
-      statusTone: 'success',
-      stage: 'termsheet',
-      currentOwner: PEOPLE.ops,
-      waitingOn: 'Morgan Stanley（条款书）',
-      nextAction: '等待发行商条款书并校验',
+      truth: {
+        waitingOn: 'Morgan Stanley（条款书）',
+        nextAction: '等待发行商条款书并校验',
+      },
     })
     this.pushContextBrief(
       PEOPLE.ops,
@@ -1308,18 +1242,9 @@ class Store {
     const t = setClock('14:55')
     this.updateArtifact('art-tv', { status: 'EXCEPTION' })
     this.systemEvent('flag', '已提出异常：Settlement 差异（T+2 vs T+3）', `Mia · 簿记 / 核对 · ${t}`, 'critical')
-    this.addAudit({
+    this.formalTransition('raiseException', {
       time: t,
-      actor: 'Mia',
-      actorRole: '簿记 / 核对',
-      action: 'Raise Exception（Settlement mismatch）',
-      priorState: 'TERMSHEET_REVIEW',
-      newState: 'EXCEPTION',
-    })
-    this.patchTruth({
-      status: 'EXCEPTION',
-      statusLabel: '异常 Exception',
-      statusTone: 'critical',
+      truth: {
       stageException: true,
       nextAction: '与 MS 核实结算日；核实后可返回条款书审批',
       alerts: [
@@ -1333,6 +1258,7 @@ class Store {
         },
         ...this.state.truth.alerts.filter((x) => x.id !== 'al-ts'),
       ],
+      },
     })
     this.addChange('Exception raised', `Mia · ${t}`)
   }
@@ -1353,21 +1279,13 @@ class Store {
       })
     }
     this.systemEvent('check', '已与 MS 核实：T+2 正确，条款书已更正重发', `Mia · 簿记 / 核对 · ${t}`, 'success')
-    this.addAudit({
+    this.formalTransition('resolveException', {
       time: t,
-      actor: 'Mia',
-      actorRole: '簿记 / 核对',
-      action: '异常已核实解决（MS 更正条款书为 T+2）',
-      priorState: 'EXCEPTION',
-      newState: 'TERMSHEET_REVIEW',
-    })
-    this.patchTruth({
-      status: 'TERMSHEET_REVIEW',
-      statusLabel: '条款书待审批',
-      statusTone: 'warning',
-      stageException: false,
-      nextAction: '簿记 / 核对审批更正后的条款书',
-      alerts: this.state.truth.alerts.filter((x) => x.id !== 'al-exc'),
+      truth: {
+        stageException: false,
+        nextAction: '簿记 / 核对审批更正后的条款书',
+        alerts: this.state.truth.alerts.filter((x) => x.id !== 'al-exc'),
+      },
     })
   }
 
@@ -1375,24 +1293,14 @@ class Store {
     const t = setClock('15:00')
     this.updateArtifact('art-tv', { status: 'APPROVED', approvedMeta: `Mia · 簿记 / 核对 · ${t} 审批` })
     this.systemEvent('check', 'Termsheet 已审批 · Case 完成', `Mia · 簿记 / 核对 · ${t}`, 'success')
-    this.addAudit({
+    this.formalTransition('approveTermsheet', {
       time: t,
-      actor: 'Mia',
-      actorRole: '簿记 / 核对',
-      action: 'Approve Termsheet',
-      priorState: this.state.truth.status,
-      newState: 'COMPLETED',
-    })
-    this.patchTruth({
-      status: 'COMPLETED',
-      statusLabel: '已完成',
-      statusTone: 'success',
-      stage: 'done',
-      stageException: false,
-      currentOwner: null,
-      waitingOn: null,
-      nextAction: '无 · Case 已完成',
-      alerts: [],
+      truth: {
+        stageException: false,
+        waitingOn: null,
+        nextAction: '无 · Case 已完成',
+        alerts: [],
+      },
     })
     this.set({
       archivedCaseIds: this.state.archivedCaseIds.includes('SP-001')

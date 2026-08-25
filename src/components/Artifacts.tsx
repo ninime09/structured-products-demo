@@ -14,6 +14,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { store, useEngine } from '../hooks'
+import { FCN_WORKFLOW } from '../config/fcn-pack/workflow'
 import type { Artifact, RoleKey } from '../types'
 import { Button, Panel, Tag } from './primitives'
 import { confirmThen } from './confirm'
@@ -334,7 +335,7 @@ function NeedBrief({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
             <ActionBtn
               label="确认客户需求"
               kind="primary"
-              allowed={['rm']}
+              allowed={FCN_WORKFLOW.confirmNeed.allowedRoles}
               role={role}
               onClick={() =>
                 confirmThen({
@@ -407,7 +408,7 @@ function StructureProposal({ artifact, role }: { artifact: Artifact; role: RoleK
             <ActionBtn
               label="审批结构"
               kind="primary"
-              allowed={['ps']}
+              allowed={FCN_WORKFLOW.approveStructure.allowedRoles}
               role={role}
               onClick={() =>
                 confirmThen({
@@ -507,7 +508,7 @@ function RFQPackage({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
             <ActionBtn
               label="退回修改"
               kind="danger-ghost"
-              allowed={['dealer', 'ps']}
+              allowed={FCN_WORKFLOW.returnRFQ.allowedRoles}
               role={role}
               onClick={() =>
                 confirmThen({
@@ -523,7 +524,7 @@ function RFQPackage({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
             <ActionBtn
               label="接受询价请求"
               kind="primary"
-              allowed={['dealer']}
+              allowed={FCN_WORKFLOW.acceptPricing.allowedRoles}
               role={role}
               onClick={() =>
                 confirmThen({
@@ -593,7 +594,7 @@ function QuoteMatrix({ artifact, role }: { artifact: Artifact; role: RoleKey }) 
             <ActionBtn
               label="修改结构"
               kind="ghost"
-              allowed={['dealer', 'ps']}
+              allowed={FCN_WORKFLOW.modifyFromPricing.allowedRoles}
               role={role}
               onClick={() =>
                 confirmThen({
@@ -609,7 +610,7 @@ function QuoteMatrix({ artifact, role }: { artifact: Artifact; role: RoleKey }) 
             <ActionBtn
               label="请求重报"
               kind="secondary"
-              allowed={['dealer']}
+              allowed={FCN_WORKFLOW.requestRequote.allowedRoles}
               role={role}
               onClick={() =>
                 confirmThen({
@@ -624,7 +625,7 @@ function QuoteMatrix({ artifact, role }: { artifact: Artifact; role: RoleKey }) 
             <ActionBtn
               label="准备客户报价"
               kind="primary"
-              allowed={['dealer']}
+              allowed={FCN_WORKFLOW.prepareClientQuote.allowedRoles}
               role={role}
               onClick={() =>
                 confirmThen({
@@ -728,7 +729,7 @@ function ClientQuote({ artifact, role }: { artifact: Artifact; role: RoleKey }) 
           <ActionBtn
             label="发送给客户"
             kind="primary"
-            allowed={['rm']}
+            allowed={FCN_WORKFLOW.sendClientQuote.allowedRoles}
             role={role}
             onClick={() =>
               confirmThen({
@@ -794,7 +795,7 @@ function InstructionCard({ artifact, role }: { artifact: Artifact; role: RoleKey
             <ActionBtn
               label="驳回"
               kind="danger-ghost"
-              allowed={['rm']}
+              allowed={FCN_WORKFLOW.rejectInstruction.allowedRoles}
               role={role}
               onClick={() =>
                 confirmThen({
@@ -810,7 +811,7 @@ function InstructionCard({ artifact, role }: { artifact: Artifact; role: RoleKey
             <ActionBtn
               label="确认客户指令"
               kind="primary"
-              allowed={['rm']}
+              allowed={FCN_WORKFLOW.confirmInstruction.allowedRoles}
               role={role}
               onClick={() =>
                 confirmThen({
@@ -877,7 +878,7 @@ function ExecutionTicket({ artifact, role }: { artifact: Artifact; role: RoleKey
           <ActionBtn
             label="确认并执行"
             kind="primary"
-            allowed={['dealer']}
+            allowed={FCN_WORKFLOW.executeTrade.allowedRoles}
             role={role}
             onClick={() =>
               confirmThen({
@@ -944,7 +945,7 @@ function TermsheetValidation({ artifact, role }: { artifact: Artifact; role: Rol
               <ActionBtn
                 label="Request Corrected Term Sheet"
                 kind="primary"
-                allowed={['ops', 'dealer']}
+                allowed={FCN_WORKFLOW.raiseException.allowedRoles}
                 role={role}
                 onClick={() =>
                   confirmThen({
@@ -962,7 +963,7 @@ function TermsheetValidation({ artifact, role }: { artifact: Artifact; role: Rol
             <ActionBtn
               label="审批条款书"
               kind="primary"
-              allowed={['ops']}
+              allowed={FCN_WORKFLOW.approveTermsheet.allowedRoles}
               role={role}
               onClick={() =>
                 confirmThen({
@@ -979,7 +980,7 @@ function TermsheetValidation({ artifact, role }: { artifact: Artifact; role: Rol
           <ActionBtn
             label="已与 MS 核实 · 恢复审批"
             kind="secondary"
-            allowed={['ops']}
+            allowed={FCN_WORKFLOW.resolveException.allowedRoles}
             role={role}
             onClick={() =>
               confirmThen({

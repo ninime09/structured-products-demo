@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { OTHER_CASES, PEOPLE } from '../data'
+import { transitionMeta } from '../config/fcn-pack/workflow'
 import { store, useEngine } from '../hooks'
 import type { RoleKey } from '../types'
 import { IconButton, Tag } from './primitives'
@@ -368,22 +369,8 @@ export function ConfirmModal() {
   const standardAction = !execution && !needHandoff
   const acknowledged = acknowledgedKey === confirm.key
   const acceptedGap = acknowledgedKey !== 'need-gap-off'
-  const actionMeta: Record<string, { current: string; next: string; owner: string; label: string }> = {
-    approveStructure: { current: 'STRUCTURE_REVIEW', next: 'STRUCTURE_APPROVED', owner: 'Ken · Dealer', label: 'Structure approval' },
-    returnRFQ: { current: 'RFQ_READY', next: 'STRUCTURE_MODIFICATION_REQUIRED', owner: 'David · Product Specialist', label: 'Return for modification' },
-    acceptPricing: { current: 'RFQ_READY', next: 'PRICING_IN_PROGRESS', owner: 'Ken · Dealer', label: 'Release market RFQ' },
-    modifyFromPricing: { current: 'PRICING_IN_PROGRESS', next: 'STRUCTURE_MODIFICATION_REQUIRED', owner: 'David · Product Specialist', label: 'Modify structure' },
-    requestRequote: { current: 'PRICING_IN_PROGRESS', next: 'REQUOTE_REQUIRED', owner: 'Ken · Dealer', label: 'Request refreshed quotes' },
-    prepareClientQuote: { current: 'PRICING_IN_PROGRESS', next: 'CLIENT_QUOTE_READY', owner: 'Alice · RM', label: 'Prepare client communication' },
-    sendClientQuote: { current: 'CLIENT_QUOTE_READY', next: 'WAITING_FOR_CLIENT', owner: 'Alice · RM', label: 'External client communication' },
-    rejectInstruction: { current: 'CLIENT_INSTRUCTION_PENDING_CONFIRMATION', next: 'WAITING_FOR_CLIENT', owner: 'Alice · RM', label: 'Reject AI detection' },
-    confirmInstruction: { current: 'CLIENT_INSTRUCTION_PENDING_CONFIRMATION', next: 'CLIENT_INSTRUCTION_CONFIRMED', owner: 'Ken · Dealer', label: 'Formal client instruction' },
-    requestLiveRequote: { current: 'LIVE_REQUOTE_REQUIRED', next: 'LIVE_REQUOTE_REQUIRED', owner: 'Ken · Dealer', label: 'Request live executable quote' },
-    raiseException: { current: 'TERMSHEET_REVIEW', next: 'EXCEPTION', owner: 'MS Documentation / Trade Support', label: 'Route documentation exception' },
-    resolveException: { current: 'EXCEPTION', next: 'TERMSHEET_REVIEW', owner: 'Mia · Operations', label: 'Resolve exception' },
-    approveTermsheet: { current: 'TERMSHEET_REVIEW', next: 'COMPLETED', owner: 'No further owner', label: 'Final term sheet approval' },
-  }
-  const meta = actionMeta[confirm.key] ?? { current: 'CURRENT_STATE', next: 'NEXT_STATE', owner: 'Current case owner', label: 'Formal workflow action' }
+  // 状态预览直接查 FCN 流转表（权限、状态、下一负责人的单一来源）。
+  const meta = transitionMeta(confirm.key) ?? { current: 'CURRENT_STATE', next: 'NEXT_STATE', owner: 'Current case owner', label: 'Formal workflow action' }
   return (
     <div className="modal-mask" onClick={() => store.cancelConfirm()}>
       <div className={`modal${execution ? ' execution-confirm' : needHandoff ? ' need-confirm' : standardAction ? ' standard-confirm' : ''}`} onClick={(e) => e.stopPropagation()}>
