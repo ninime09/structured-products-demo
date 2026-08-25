@@ -184,6 +184,18 @@ export type ArtifactData =
       overall: string
       recommended: string
     }
+  | {
+      // 流程偏离卡：自然语言请求 → AI 起草 → 责任角色确认后成为留痕流转。
+      // 例外进入流程而不是绕过流程；偏离事件本身是流程改进的数据。
+      type: 'deviationProposal'
+      request: string
+      requestedBy: string
+      classification: string
+      skips: string
+      basis: string
+      risks: string[]
+      approver: string
+    }
 
 export interface Artifact {
   id: string

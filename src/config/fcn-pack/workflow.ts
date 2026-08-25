@@ -35,6 +35,18 @@ export const FCN_WORKFLOW: Record<string, TransitionRule> = {
     ownerLabel: 'David · Product Specialist',
     allowedRoles: ['rm'],
   },
+  approveDeviation: {
+    auditAction: 'Approve Process Deviation（跳过结构对比）',
+    metaLabel: 'Approve process deviation',
+    from: 'STRUCTURE_REVIEW',
+    to: 'STRUCTURE_APPROVED',
+    toLabel: '结构已确认（偏离批准）',
+    toTone: 'success',
+    stage: 'rfq',
+    owner: 'dealer',
+    ownerLabel: 'Ken · Dealer',
+    allowedRoles: ['ps'],
+  },
   approveStructure: {
     auditAction: 'Approve Structure',
     metaLabel: 'Structure approval',

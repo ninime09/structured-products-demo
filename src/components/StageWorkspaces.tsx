@@ -109,8 +109,32 @@ export function StructureWorkspace() {
           <ActionBtn label="Approve Structure" kind="primary" allowed={FCN_WORKFLOW.approveStructure.allowedRoles} role={role} onClick={() => confirmThen({ key: 'approveStructure', title: 'Approve Structure', summary: [`${selected.label} · ${selected.productType} ${selected.tenor}`, `Strike ${selected.strike} · KI ${selected.knockIn}`, `Autocall ${selected.autocall}`, `Coupon target ${selected.couponTarget}`], consequence: 'The selected terms become the approved structure. AI will prepare the RFQ package and hand the case to Dealer.', confirmLabel: 'Approve Structure' })} />
         </StageActionBar>}
       >
-        <div className="structure-ai-brief"><Sparkles size={17} /><div><span>AI comparison brief</span><strong>Three structures normalized against return target and risk tolerance</strong><p>Option B is the recommended comparison starting point. Final suitability judgment remains with Product Specialist.</p></div><Tag tone="ai">Decision support</Tag></div>
+        <div className="structure-ai-brief"><Sparkles size={17} /><div><span>AI comparison brief</span><strong>Three structures normalized against return target and risk tolerance</strong><p>Option B is the recommended comparison starting point. Final suitability judgment remains with Product Specialist.<br /><em className="deviation-hint">客户条款已完整时，可在下方输入框用自然语言发起流程偏离（例："条款已完整，跳过对比直接询价"）。</em></p></div><Tag tone="ai">Decision support</Tag></div>
         {artifacts['art-need']?.note ? <div className="artifact-note"><Pencil size={12} /><span><b>附注 · {artifacts['art-need'].note.author}（随需求摘要流转）</b>{artifacts['art-need'].note.text}</span></div> : null}
+        {(() => {
+          const dev = artifacts['art-dev']
+          if (!dev || dev.data.type !== 'deviationProposal' || dev.status === 'STALE') return null
+          const d = dev.data
+          return (
+            <div className={`deviation-card${dev.status === 'APPROVED' ? ' approved' : ''}`}>
+              <div className="deviation-head"><AlertTriangle size={15} /><strong>流程偏离卡 · Process Deviation</strong><StatusBadge status={dev.status} /></div>
+              <blockquote>"{d.request}" — {d.requestedBy}</blockquote>
+              <div className="deviation-grid">
+                <div><span>AI 分类</span><strong>{d.classification}</strong></div>
+                <div><span>跳过环节</span><strong>{d.skips}</strong></div>
+                <div><span>依据</span><strong>{d.basis}</strong></div>
+                <div><span>需确认人</span><strong>{d.approver}</strong></div>
+              </div>
+              <div className="deviation-risks">{d.risks.map((r) => <Tag key={r}>{r}</Tag>)}</div>
+              {dev.status === 'PENDING APPROVAL' ? (
+                <div className="deviation-actions">
+                  <ActionBtn label="驳回 · 按标准流程" kind="ghost" allowed={FCN_WORKFLOW.approveDeviation.allowedRoles} role={role} onClick={() => store.rejectDeviation()} />
+                  <ActionBtn label="批准偏离 · 直接询价" kind="primary" allowed={FCN_WORKFLOW.approveDeviation.allowedRoles} role={role} onClick={() => confirmThen({ key: 'approveDeviation', title: 'Approve Process Deviation', summary: ['跳过：结构三方案对比', '依据：客户邮件完整条款 FCN · 6M · Strike 80% · KI 70%', '强制检查不豁免：适当性 · 职责分离', '偏离将单独留痕并计入流程改进统计'], consequence: '批准后案例直接进入询价（RFQ）。此偏离作为独立审计事件记录，不豁免任何策略检查。', confirmLabel: '批准偏离', danger: true })} />
+                </div>
+              ) : dev.approvedMeta ? <div className="deviation-approved">✓ {dev.approvedMeta}</div> : null}
+            </div>
+          )
+        })()}
         {truth.status === 'STRUCTURE_MODIFICATION_REQUIRED' ? <div className="inline-stage-warning"><AlertTriangle size={15} /><span><strong>Returned for modification.</strong> Review market feedback, adjust terms and re-approve before a new RFQ is created.</span></div> : null}
         <div className="structure-options">
           {d.options.map((option) => <button key={option.optionId} className={option.optionId === d.selectedId ? 'selected' : ''} disabled={role !== 'ps'} onClick={() => store.selectOption(option.optionId)}>

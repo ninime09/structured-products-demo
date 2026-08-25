@@ -1073,5 +1073,7 @@ export function ArtifactCard({ artifactId }: { artifactId: string }) {
       return <ExecutionTicket artifact={artifact} role={role} />
     case 'termsheetValidation':
       return <TermsheetValidation artifact={artifact} role={role} />
+    case 'deviationProposal':
+      return null // 在结构阶段工作台内呈现，不单独出时间线卡
   }
 }

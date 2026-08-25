@@ -27,6 +27,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { OTHER_CASES, PEOPLE } from '../data'
 import { transitionMeta } from '../config/fcn-pack/workflow'
+import { SKILL_MANIFESTS } from '../config/fcn-pack/skills'
 import { store, useEngine } from '../hooks'
 import type { RoleKey } from '../types'
 import { IconButton, Tag } from './primitives'
@@ -259,6 +260,21 @@ export function Drawer() {
                   <section><span>{zh ? '使用的数据' : 'Data it uses'}</span><strong>{selectedSkill.dataUsed}</strong></section>
                   <section className="skill-example"><span>{zh ? '示例指令' : 'Example instruction'}</span><strong>“{selectedSkill.example}”</strong></section>
                 </div>
+                {SKILL_MANIFESTS[selectedSkill.id] ? (
+                  <div className="skill-manifest">
+                    <div className="skill-manifest-head">
+                      <span>Manifest · {zh ? '治理元数据（注册表审批依据）' : 'Governance (registry approval basis)'}</span>
+                      <Tag tone="primary">v{SKILL_MANIFESTS[selectedSkill.id].version}</Tag>
+                      <Tag tone="success">{zh ? '审批' : 'Approved'} · {SKILL_MANIFESTS[selectedSkill.id].approvedBy}</Tag>
+                    </div>
+                    <div className="skill-manifest-grid">
+                      <div><span>reads</span><code>{SKILL_MANIFESTS[selectedSkill.id].reads.join('  ·  ')}</code><small>{zh ? '默认拒绝，声明即上限' : 'deny by default'}</small></div>
+                      <div><span>writes</span><code>{SKILL_MANIFESTS[selectedSkill.id].writes.join('  ·  ')}</code><small>{zh ? '只出草稿' : 'drafts only'}</small></div>
+                      <div><span>can_trigger_transition</span><code className="deny">false</code><small>{zh ? '正式流转必须人确认' : 'formal transitions need human confirmation'}</small></div>
+                      <div><span>eval</span><code>{SKILL_MANIFESTS[selectedSkill.id].evalNote}</code><small>{zh ? '升版本门禁' : 'version gate'}</small></div>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="skill-detail-actions">
                   {!installedSkillIds.includes(selectedSkill.id) ? (
                     <button className="btn btn-secondary" onClick={() => installSkill(selectedSkill.id)}><Download size={15} />{zh ? '安装技能' : 'Install skill'}</button>
@@ -275,7 +291,7 @@ export function Drawer() {
                     const installed = installedSkillIds.includes(skill.id)
                     return <article className="skill-card" key={skill.id}>
                       <div className="skill-card-top"><span className="skill-icon"><skill.icon size={18} /></span>{installed ? <Tag tone="success">{zh ? '已安装' : 'Installed'}</Tag> : <Tag tone="primary">{zh ? '推荐' : 'Recommended'}</Tag>}</div>
-                      <div><h3>{skill.name}</h3><p>{skill.description}</p></div>
+                      <div><h3>{skill.name}{SKILL_MANIFESTS[skill.id] ? <span className="skill-ver">v{SKILL_MANIFESTS[skill.id].version}</span> : null}</h3><p>{skill.description}</p></div>
                       <div className="skill-card-actions"><button onClick={() => setSelectedSkillId(skill.id)}>{zh ? '详情' : 'Details'}</button>{!installed ? <button onClick={() => installSkill(skill.id)}><Download size={14} />{zh ? '安装' : 'Install'}</button> : null}<button className="primary" onClick={() => trySkill(skill)}><Play size={14} />{zh ? '立即体验' : 'Try now'}</button></div>
                     </article>
                   })}
@@ -286,7 +302,7 @@ export function Drawer() {
                     const installed = installedSkillIds.includes(skill.id)
                     return <article className="skill-card" key={skill.id}>
                       <div className="skill-card-top"><span className="skill-icon neutral"><skill.icon size={18} /></span>{installed ? <Tag tone="success">{zh ? '已安装' : 'Installed'}</Tag> : <Tag>{zh ? '公司通用' : 'Company'}</Tag>}</div>
-                      <div><h3>{skill.name}</h3><p>{skill.description}</p></div>
+                      <div><h3>{skill.name}{SKILL_MANIFESTS[skill.id] ? <span className="skill-ver">v{SKILL_MANIFESTS[skill.id].version}</span> : null}</h3><p>{skill.description}</p></div>
                       <div className="skill-card-actions"><button onClick={() => setSelectedSkillId(skill.id)}>{zh ? '详情' : 'Details'}</button>{!installed ? <button onClick={() => installSkill(skill.id)}><Download size={14} />{zh ? '安装' : 'Install'}</button> : null}<button className="primary" onClick={() => trySkill(skill)}><Play size={14} />{zh ? '立即体验' : 'Try now'}</button></div>
                     </article>
                   })}

@@ -500,13 +500,55 @@ class Store {
   postTradeRoomMessage(text: string) {
     const body = text.trim()
     if (!body) return
+    const author = PEOPLE[this.state.role]
     this.push({
       kind: 'human',
       id: uid('tl'),
-      author: PEOPLE[this.state.role],
+      author,
       time: tick(),
       text: body,
     })
+    // 自然语言流程偏离：结构审批阶段，识别"跳过/直连询价"类请求 → AI 起草偏离卡。
+    if (
+      this.state.truth.status === 'STRUCTURE_REVIEW' &&
+      !this.state.artifacts['art-dev'] &&
+      /跳过|直接询价|直连询价|不用比较|省略比较|skip/i.test(body)
+    ) {
+      this.runProcessing(
+        ['AI 正在评估流程偏离请求...', '正在核对强制检查项（适当性 · 职责分离不可豁免）...'],
+        800,
+        () => {
+          const ct = tick(1)
+          this.pushArtifactItem({
+            id: 'art-dev',
+            title: 'Process Deviation Proposal',
+            titleZh: '流程偏离卡',
+            status: 'PENDING APPROVAL',
+            version: 1,
+            createdAt: ct,
+            data: {
+              type: 'deviationProposal',
+              request: body,
+              requestedBy: `${author.name} · ${author.roleLabel}`,
+              classification: '路径非标 · 可受理（不豁免任何强制检查）',
+              skips: '结构三方案对比（结构 → 询价 直连）',
+              basis: '客户邮件已含完整条款：FCN · 6M · Strike 80% · KI 70%',
+              risks: ['未经方案比较，票息可能非最优', '适当性检查与职责分离仍强制执行', '偏离事件计入流程改进统计'],
+              approver: 'David · 产品专家',
+            },
+          })
+          this.systemEvent('flag', 'AI 起草了流程偏离卡：跳过结构对比，需产品专家确认', `AI · ${ct}`, 'warning')
+          this.addAudit({
+            time: ct,
+            actor: 'AI Copilot',
+            actorRole: 'AI',
+            action: '已起草 Process Deviation Proposal（等待产品专家确认）',
+            priorState: 'STRUCTURE_REVIEW',
+            newState: 'STRUCTURE_REVIEW',
+          })
+        },
+      )
+    }
   }
   reset() {
     this.epoch++
@@ -535,6 +577,7 @@ class Store {
     const map: Record<string, () => void> = {
       confirmNeed: () => this.doConfirmNeed(),
       approveStructure: () => this.doApproveStructure(),
+      approveDeviation: () => this.doApproveDeviation(),
       acceptPricing: () => this.doAcceptPricing(),
       returnRFQ: () => this.doLoopToStructure('returnRFQ', 'Dealer 复核 RFQ 后退回：KI 65% 建议复核发行商可行性'),
       modifyFromPricing: () => this.doLoopToStructure('modifyFromPricing', '报价矩阵显示当前结构经济性不足，退回产品专家修改'),
@@ -703,6 +746,17 @@ class Store {
     })
     if (this.state.kiModified) this.addChange('KI 70% → 65%', `Approved by David · ${t}`)
     this.addChange('结构 Approved', `David · 产品专家 · ${t}`)
+    this.queueRFQGeneration(
+      { tenor: opt.tenor, strike: opt.strike, knockIn: opt.knockIn, autocall: opt.autocall },
+      `David 已于 ${t} 审批结构：Tencent FCN · ${opt.tenor} · Strike ${opt.strike} · KI ${opt.knockIn}，RFQ Package 已生成并通过完整性检查。`,
+    )
+  }
+
+  /** 结构确认（正常审批或偏离批准）后，AI 生成 RFQ 包并交接 Dealer。 */
+  private queueRFQGeneration(
+    terms: { tenor: string; strike: string; knockIn: string; autocall: string },
+    briefLine: string,
+  ) {
     this.later(600, () => {
       this.runProcessing(['正在起草 RFQ 包...', '正在做完整性检查...'], 900, () => {
         const ct = setClock('14:16')
@@ -719,10 +773,10 @@ class Store {
               { label: 'Product Type', value: 'Fixed Coupon Note (FCN)' },
               { label: 'Underlying', value: 'Tencent / 0700.HK' },
               { label: 'Notional', value: 'USD 1,000,000' },
-              { label: 'Tenor', value: opt.tenor },
-              { label: 'Strike', value: opt.strike },
-              { label: 'Knock-In', value: opt.knockIn },
-              { label: 'Autocall', value: opt.autocall },
+              { label: 'Tenor', value: terms.tenor },
+              { label: 'Strike', value: terms.strike },
+              { label: 'Knock-In', value: terms.knockIn },
+              { label: 'Autocall', value: terms.autocall },
               { label: 'Coupon Type', value: 'Fixed · 月付' },
               { label: 'Settlement', value: 'T+2 · 现金/实物' },
             ],
@@ -751,7 +805,7 @@ class Store {
         this.pushContextBrief(
           PEOPLE.dealer,
           'RFQ Ready',
-          [`David 已于 ${t} 审批结构：Tencent FCN · ${opt.tenor} · Strike ${opt.strike} · KI ${opt.knockIn}，RFQ Package 已生成并通过完整性检查。`],
+          [briefLine],
           [
             { label: 'Approved Structure · 已审批结构', artifactId: 'art-structure' },
             { label: 'RFQ Package · RFQ包', artifactId: 'art-rfq' },
@@ -759,6 +813,55 @@ class Store {
           '复核 RFQ 并接受定价请求',
         )
       })
+    })
+  }
+
+  // ── 流程偏离：自然语言请求 → AI 起草偏离卡 → 产品专家确认 ─────────────
+  private doApproveDeviation() {
+    const dev = this.state.artifacts['art-dev']
+    if (!dev || dev.data.type !== 'deviationProposal' || dev.status !== 'PENDING APPROVAL') return
+    const t = tick(1)
+    this.updateArtifact('art-dev', { status: 'APPROVED', approvedMeta: `David · 产品专家 · ${t} 批准偏离` })
+    const a = this.state.artifacts['art-structure']
+    if (a) this.updateArtifact('art-structure', { status: 'SUPERSEDED' })
+    this.systemEvent('flag', '流程偏离已批准：跳过结构对比，按客户条款直接询价', `David · 产品专家 · ${t}`, 'warning')
+    this.formalTransition('approveDeviation', {
+      time: t,
+      detail: '跳过结构对比 · 依据客户完整条款（偏离事件计入流程改进统计）',
+      truth: {
+        waitingOn: null,
+        nextAction: '等待 AI 生成 RFQ包',
+        approvedTerms: [
+          { label: 'Underlying', value: '0700.HK' },
+          { label: 'Product', value: 'FCN · 6M' },
+          { label: 'Notional', value: 'USD 1,000,000' },
+          { label: 'Strike', value: '80%' },
+          { label: 'KI', value: '70%' },
+          { label: 'Autocall', value: '月度观察 · 自第 2 月起' },
+        ],
+      },
+    })
+    this.addChange('流程偏离批准 · 直连询价', `David · ${t}`)
+    this.queueRFQGeneration(
+      { tenor: '6M', strike: '80%', knockIn: '70%', autocall: '月度观察 · 自第 2 月起' },
+      `David 已于 ${t} 批准流程偏离：跳过结构对比，按客户完整条款（FCN · 6M · Strike 80% · KI 70%）直接询价。偏离已单独留痕。`,
+    )
+  }
+
+  /** 驳回偏离请求：回到标准流程，不改变案例状态。 */
+  rejectDeviation() {
+    const dev = this.state.artifacts['art-dev']
+    if (!dev || dev.status !== 'PENDING APPROVAL') return
+    const t = tick(1)
+    this.updateArtifact('art-dev', { status: 'STALE', approvedMeta: `David · 产品专家 · ${t} 驳回，按标准流程继续` })
+    this.systemEvent('arrow', '流程偏离被驳回：继续标准结构对比流程', `David · 产品专家 · ${t}`)
+    this.addAudit({
+      time: t,
+      actor: 'David',
+      actorRole: '产品专家',
+      action: 'Reject Process Deviation',
+      priorState: this.state.truth.status,
+      newState: this.state.truth.status,
     })
   }
 

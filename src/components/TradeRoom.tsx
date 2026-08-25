@@ -40,6 +40,7 @@ const WORKING_VIEWERS: Record<Artifact['data']['type'], RoleKey[]> = {
   instruction: ['rm'],
   executionTicket: ['dealer'],
   termsheetValidation: ['ops', 'dealer'],
+  deviationProposal: ['rm', 'ps', 'dealer'],
 }
 
 function itemVisibleTo(item: TimelineItem, role: RoleKey, artifacts: Record<string, Artifact>): boolean {
