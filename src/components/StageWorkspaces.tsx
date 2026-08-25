@@ -110,6 +110,7 @@ export function StructureWorkspace() {
         </StageActionBar>}
       >
         <div className="structure-ai-brief"><Sparkles size={17} /><div><span>AI comparison brief</span><strong>Three structures normalized against return target and risk tolerance</strong><p>Option B is the recommended comparison starting point. Final suitability judgment remains with Product Specialist.</p></div><Tag tone="ai">Decision support</Tag></div>
+        {artifacts['art-need']?.note ? <div className="artifact-note"><Pencil size={12} /><span><b>附注 · {artifacts['art-need'].note.author}（随需求摘要流转）</b>{artifacts['art-need'].note.text}</span></div> : null}
         {truth.status === 'STRUCTURE_MODIFICATION_REQUIRED' ? <div className="inline-stage-warning"><AlertTriangle size={15} /><span><strong>Returned for modification.</strong> Review market feedback, adjust terms and re-approve before a new RFQ is created.</span></div> : null}
         <div className="structure-options">
           {d.options.map((option) => <button key={option.optionId} className={option.optionId === d.selectedId ? 'selected' : ''} disabled={role !== 'ps'} onClick={() => store.selectOption(option.optionId)}>

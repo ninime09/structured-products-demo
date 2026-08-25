@@ -193,6 +193,8 @@ export interface Artifact {
   version: number
   createdAt: string
   approvedMeta?: string
+  /** 非结构化附注：schema 装不下的语感与判断，随产物流转（上下文断点补偿） */
+  note?: { author: string; text: string }
   data: ArtifactData
 }
 

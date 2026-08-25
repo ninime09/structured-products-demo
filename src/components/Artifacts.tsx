@@ -15,6 +15,8 @@ import {
 } from 'lucide-react'
 import { store, useEngine } from '../hooks'
 import { FCN_WORKFLOW } from '../config/fcn-pack/workflow'
+import { NEED_BRIEF_SCHEMA } from '../config/fcn-pack/schemas'
+import { POLICIES } from '../config/fcn-pack/policies'
 import type { Artifact, RoleKey } from '../types'
 import { Button, Panel, Tag } from './primitives'
 import { confirmThen } from './confirm'
@@ -94,6 +96,12 @@ function ArtifactFrame({
         </span>
       </div>
       {collapsed ? null : <div className="artifact-body">{children}</div>}
+      {!collapsed && artifact.note ? (
+        <div className="artifact-note">
+          <PenLine size={12} />
+          <span><b>附注 · {artifact.note.author}</b>{artifact.note.text}</span>
+        </div>
+      ) : null}
       {!collapsed && (actions || sourceRef || artifact.approvedMeta) && (
         <div className="artifact-foot">
           {sourceRef ? (
@@ -212,22 +220,17 @@ export function NeedReviewWorkspace() {
 
   const sourceClass = (key: string, color: string) => `evidence-mark ${color}${linkedKey === key ? ' linked-active' : ''}${pulseTarget?.side === 'source' && pulseTarget.key === key ? ' evidence-pulse' : ''}`
 
-  const extracted: Array<{
-    key: string
-    label: string
-    value: string
-    source: string
-    status: 'verified' | 'missing'
-  }> = [
-    { key: 'underlying', label: zh ? '标的' : 'Underlying', value: fieldValue('Underlying'), source: zh ? '邮件第 2 行' : 'Email line 2', status: 'verified' },
-    { key: 'risk', label: zh ? '风险承受度' : 'Risk Tolerance', value: zh ? '中等' : 'Moderate', source: zh ? '邮件第 5 行' : 'Email line 5', status: 'verified' },
-    { key: 'notional', label: zh ? '名义本金' : 'Notional', value: fieldValue('Notional'), source: zh ? '邮件第 3 行' : 'Email line 3', status: 'verified' },
-    { key: 'view', label: zh ? '市场观点' : 'Directional View', value: zh ? '看好' : 'Bullish', source: zh ? '邮件第 6 行' : 'Email line 6', status: 'verified' },
-    { key: 'suitability', label: zh ? '客户分级 · 适当性' : 'Client Classification', value: zh ? '个人 PI · 可承受 C4' : 'Individual PI · up to C4', source: zh ? 'CRM 客户档案（非邮件）' : 'CRM profile (not email)', status: 'verified' },
-    { key: 'horizon', label: zh ? '投资期限' : 'Investment Horizon', value: fieldValue('Investment Horizon'), source: zh ? '邮件第 2 行' : 'Email line 2', status: 'verified' },
-    { key: 'liquidity', label: zh ? '流动性偏好' : 'Liquidity Preference', value: clarified ? fieldValue('Liquidity Preference') : zh ? '缺失' : 'Missing', source: '—', status: clarified ? 'verified' : 'missing' },
-    { key: 'target', label: zh ? '目标收益' : 'Target Yield', value: fieldValue('Target Yield'), source: zh ? '邮件第 4 行' : 'Email line 4', status: 'verified' },
-  ]
+  // 核对界面由 fcn-pack 的产物 schema 渲染：字段、来源、缺失规则全部来自配置。
+  const extracted = NEED_BRIEF_SCHEMA.map((f) => ({
+    key: f.key,
+    label: zh ? f.labelZh : f.labelEn,
+    value:
+      f.optional && !clarified
+        ? zh ? '缺失' : 'Missing'
+        : (zh ? f.valueZh : f.valueEn) ?? fieldValue(f.fieldLabel),
+    source: zh ? f.sourceZh : f.sourceEn,
+    status: f.optional && !clarified ? ('missing' as const) : ('verified' as const),
+  }))
 
   return (
     <div className="need-review-workspace">
@@ -294,7 +297,7 @@ export function NeedReviewWorkspace() {
           <div className="review-verification-summary">
             <span><CheckCircle2 size={14} />{zh ? '6 项已核实' : '6 verified'}</span>
             <span className="missing"><CircleAlert size={14} />{zh ? '1 项缺失' : '1 missing'}</span>
-            <span className="muted"><CheckCircle2 size={14} />{zh ? '适当性预检通过（FCN·R4 ≤ C4）' : 'Suitability pre-check passed (FCN·R4 ≤ C4)'}</span>
+            <span className="muted"><CheckCircle2 size={14} />{zh ? POLICIES.suitability.passZh : POLICIES.suitability.passEn}</span>
           </div>
         </Panel>
       </div>

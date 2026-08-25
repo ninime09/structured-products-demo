@@ -62,6 +62,9 @@ export function AssistantView() {
               {zh ? '对话' : 'Chat'}
             </button>
           </div>
+          <span className="private-zone-badge" title={zh ? '这里的对话与草稿只有你和你的 agent 可见；发布到交易室的内容才进入共享上下文并落审计。' : 'Conversations and drafts here are visible only to you and your agent; only content published to the trade room enters shared context and audit.'}>
+            {zh ? '私有工作区 · 仅你可见 · 发布到交易室才共享留痕' : 'Private workspace · only you · shared & audited on publish'}
+          </span>
         </div>
 
         <div className={`assistant-scroll-content ${assistantMode === 'chat' ? 'assistant-chat-scroll' : ''}`}>

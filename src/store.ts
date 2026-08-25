@@ -1,5 +1,7 @@
 import { PEOPLE } from './data'
 import { FCN_WORKFLOW } from './config/fcn-pack/workflow'
+import { FCN_ISSUERS, TS_VALIDATION_FIELDS } from './config/fcn-pack/schemas'
+import { POLICIES } from './config/fcn-pack/policies'
 import type {
   AppNotification,
   Artifact,
@@ -607,7 +609,11 @@ class Store {
   // ── Step 1: Confirm client need (RM) ───────────────────────────────────
   private doConfirmNeed() {
     const t = setClock('14:08')
-    this.updateArtifact('art-need', { status: 'APPROVED', approvedMeta: `Alice · RM · ${t} 确认` })
+    this.updateArtifact('art-need', {
+      status: 'APPROVED',
+      approvedMeta: `Alice · RM · ${t} 确认`,
+      note: { author: 'Alice · RM', text: '客户对保本的敏感度高于收益目标；与客户沟通时先讲下行保护，再谈票息。' },
+    })
     // David's Context Brief restates this — don't show him the event twice.
     this.systemEvent('check', '客户需求已确认', `Assigned to David · 产品专家 · ${t}`, 'success', ['rm', 'dealer'])
     this.formalTransition('confirmNeed', {
@@ -622,7 +628,10 @@ class Store {
     this.pushContextBrief(
       PEOPLE.ps,
       'Structuring · 结构设计',
-      [`Alice 已于 ${t} 确认客户需求：0700.HK · USD 1,000,000 · ~6M · 目标收益 >10% · 中等风险。`],
+      [
+        `Alice 已于 ${t} 确认客户需求：0700.HK · USD 1,000,000 · ~6M · 目标收益 >10% · 中等风险。`,
+        '附注（Alice）：客户对保本的敏感度高于收益目标；沟通时先讲下行保护。',
+      ],
       [{ label: 'Client Need Brief · 客户需求摘要', artifactId: 'art-need' }],
       '复核已确认客户需求，比较并审批结构方案',
     )
@@ -717,7 +726,7 @@ class Store {
               { label: 'Coupon Type', value: 'Fixed · 月付' },
               { label: 'Settlement', value: 'T+2 · 现金/实物' },
             ],
-            issuers: ['JPM', 'UBS', 'Morgan Stanley', 'Goldman Sachs', 'BNP'],
+            issuers: FCN_ISSUERS,
             checks: [
               { label: '关键条款完整（strike / KI / tenor / coupon type）', ok: true },
               { label: '与 Approved Structure 一致', ok: true },
@@ -1196,14 +1205,18 @@ class Store {
           createdAt: ct,
           data: {
             type: 'termsheetValidation',
-            rows: [
-              { field: 'Notional', ticket: 'USD 1,000,000', termsheet: 'USD 1,000,000', status: 'match' },
-              { field: 'Underlying', ticket: '0700.HK', termsheet: '0700.HK', status: 'match' },
-              { field: 'Strike', ticket: '80%', termsheet: '80%', status: 'match' },
-              { field: 'Knock-In', ticket: this.approvedKI(), termsheet: this.approvedKI(), status: 'match' },
-              { field: 'Coupon', ticket: '10.15%', termsheet: '10.15%', status: 'match' },
-              { field: 'Settlement', ticket: 'T+2', termsheet: 'T+3', status: 'warning' },
-            ],
+            // 比对字段清单来自 fcn-pack schema（TS_VALIDATION_FIELDS），值为本单叙事数据
+            rows: (() => {
+              const v: Record<string, { ticket: string; termsheet: string; status: 'match' | 'warning' | 'mismatch' }> = {
+                'Notional': { ticket: 'USD 1,000,000', termsheet: 'USD 1,000,000', status: 'match' },
+                'Underlying': { ticket: '0700.HK', termsheet: '0700.HK', status: 'match' },
+                'Strike': { ticket: '80%', termsheet: '80%', status: 'match' },
+                'Knock-In': { ticket: this.approvedKI(), termsheet: this.approvedKI(), status: 'match' },
+                'Coupon': { ticket: '10.15%', termsheet: '10.15%', status: 'match' },
+                'Settlement': { ticket: 'T+2', termsheet: 'T+3', status: 'warning' },
+              }
+              return TS_VALIDATION_FIELDS.map((field) => ({ field, ...v[field] }))
+            })(),
             overall: '1 项差异待人工判断',
             recommended: 'AI 标记：Settlement T+2 ≠ T+3。建议与 MS 核实后再审批，或提出异常。',
           },
@@ -1293,7 +1306,7 @@ class Store {
   private doApproveTermsheet() {
     const t = setClock('15:00')
     this.updateArtifact('art-tv', { status: 'APPROVED', approvedMeta: `Mia · 簿记 / 核对 · ${t} 审批` })
-    this.systemEvent('check', 'Termsheet 已审批（复核人 Mia ≠ 执行人 Ken · 职责分离）', `Mia · 簿记 / 核对 · ${t}`, 'success')
+    this.systemEvent('check', `Termsheet 已审批（${POLICIES.segregation.passZh}）`, `Mia · 簿记 / 核对 · ${t}`, 'success')
     this.formalTransition('approveTermsheet', {
       time: t,
       truth: {
