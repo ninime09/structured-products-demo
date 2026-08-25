@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AtSign, ChevronDown, MessageSquare, Paperclip, Pin, Send, Table2, WandSparkles } from 'lucide-react'
+import { AtSign, ChevronDown, MessageSquare, Paperclip, Pin, Send, Sparkles, Table2, WandSparkles } from 'lucide-react'
 import { OTHER_CASES, PEOPLE } from '../data'
 import { store, useEngine } from '../hooks'
 import type { Artifact, RoleKey, TimelineItem } from '../types'
@@ -240,7 +240,7 @@ export function TradeRoom() {
     <main className="main trade-main">
       <div className="main-inner">
         <div className="trade-scroll-content">
-        <div className="trade-room-heading"><MessageSquare size={16} /><strong>{zh ? '交易室' : 'Trade Room'}</strong><ChevronDown size={15} />{sourceReview ? <span className="room-mode">{zh ? '来源核对' : 'Source Review'}</span> : null}</div>
+        <div className="trade-room-heading"><MessageSquare size={16} /><strong>{zh ? '交易室' : 'Trade Room'}</strong><ChevronDown size={15} />{sourceReview ? <span className="room-mode">{zh ? '来源核对' : 'Source Review'}</span> : null}<button className="private-toggle" title="私有工作区：和你的 agent 私下讨论，发布后才进入交易室" onClick={() => store.togglePrivate()}><Sparkles size={13} />{zh ? '私有工作区' : 'Private'}</button></div>
         {sourceReview ? <NeedReviewWorkspace /> : dedicatedStage ? (
           <>
             <CurrentTruthStrip />

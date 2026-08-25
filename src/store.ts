@@ -11,6 +11,7 @@ import type {
   Participant,
   PendingConfirm,
   Person,
+  PrivateMsg,
   Quote,
   LanguageKey,
   RoleKey,
@@ -44,6 +45,9 @@ export interface EngineState {
   clarified: boolean
   kiModified: boolean
   requoteRound: number
+  privateOpen: boolean
+  privateChats: Record<RoleKey, PrivateMsg[]>
+  pendingDraftId: string | null
 }
 
 type Listener = () => void
@@ -257,6 +261,9 @@ function initialState(): EngineState {
     clarified: false,
     kiModified: false,
     requoteRound: 0,
+    privateOpen: false,
+    privateChats: { rm: [], ps: [], dealer: [], ops: [] },
+    pendingDraftId: null,
   }
 }
 
@@ -550,6 +557,105 @@ class Store {
       )
     }
   }
+  // ── 私有工作区（两区模型）────────────────────────────────────────────
+  togglePrivate(open?: boolean) {
+    this.set({ privateOpen: open ?? !this.state.privateOpen })
+  }
+
+  private pushPrivate(role: RoleKey, msg: PrivateMsg) {
+    this.set({ privateChats: { ...this.state.privateChats, [role]: [...this.state.privateChats[role], msg] } })
+  }
+
+  /** 反向门：把交易室产物拉入私区讨论（只读引用，留来源，不留讨论痕） */
+  pullIntoPrivate(artifactId: string) {
+    const a = this.state.artifacts[artifactId]
+    if (!a) return
+    const role = this.state.role
+    this.set({ privateOpen: true })
+    let text = `已读取「${a.titleZh}」v${a.version}。想让我分析什么？`
+    if (a.data.type === 'quoteMatrix') {
+      text = `已读取报价矩阵 v${a.version}：Morgan Stanley 10.62% 为最优可比；BNP 票息 10.85% 更高，但 KI 65% ≠ 批准结构的 70%，条款不可比，不能直接用于客户报价。要我解释原因，或起草给客户的说明吗？`
+    } else if (a.data.type === 'termsheetValidation') {
+      text = `已读取条款书核对 v${a.version}：Settlement 执行单 T+2 ≠ 条款书 T+3，其余 5 项一致。客户指令与执行记录都写 T+2，差异大概率是发行商文档笔误——建议请求更正版，无需客户重新确认。`
+    }
+    this.pushPrivate(role, { id: uid('pm'), who: 'agent', time: tick(), text, quotedArtifactId: artifactId })
+  }
+
+  sendPrivate(text: string) {
+    const body = text.trim()
+    if (!body) return
+    const role = this.state.role
+    this.pushPrivate(role, { id: uid('pm'), who: 'me', time: tick(), text: body })
+    this.later(700, () => this.agentReply(role, body))
+  }
+
+  /** 演示用规则式 agent 回复：真实实现由运行时层（模型网关+上下文装配）承接 */
+  private agentReply(role: RoleKey, q: string) {
+    const t = tick()
+    if (this.state.truth.status === 'STRUCTURE_REVIEW' && /跳过|直接询价|直连询价|不用比较|省略比较/.test(q)) {
+      this.pushPrivate(role, {
+        id: uid('pm'), who: 'agent', time: t,
+        text: '可以走流程偏离：客户邮件已含完整条款（FCN · 6M · Strike 80% · KI 70%）。注意两点——适当性与职责分离检查不会被豁免；偏离会作为独立事件留痕并计入流程改进统计。我起草了一条发往交易室的偏离请求，你确认后发布：',
+        draft: { kind: 'deviation', text: '客户条款已完整（FCN · 6M · Strike 80% · KI 70%），建议跳过三方案对比，直接询价。', published: false },
+      })
+      return
+    }
+    if (/话术|怎么跟客户|客户沟通|说明|解释给客户/.test(q)) {
+      this.pushPrivate(role, {
+        id: uid('pm'), who: 'agent', time: t,
+        text: '这是给客户的说明草稿（口径已按"先讲下行保护再谈票息"的附注调整），发布前你可以再改：',
+        draft: { kind: 'roomMessage', text: '和客户沟通口径：只要腾讯期间不跌破期初价的 70%，到期收回全部本金及票息；若曾跌破且到期低于 80%，将按 80% 接入股票。建议先确认客户理解下行情形，再报票息水平。', published: false },
+      })
+      return
+    }
+    if (/BNP|不可比/.test(q)) {
+      this.pushPrivate(role, {
+        id: uid('pm'), who: 'agent', time: t,
+        text: 'BNP 的 10.85% 看起来更高，但它把 KI 改成了 65%——下行保护比批准结构差了 5 个点，相当于用更高风险换票息。按流程它已被隔离在不可比区，如果想采纳，需要退回产品专家改结构重新审批，不能直接报给客户。',
+      })
+      return
+    }
+    this.pushPrivate(role, {
+      id: uid('pm'), who: 'agent', time: t,
+      text: `当前 SP-001 处于「${this.state.truth.statusLabel}」，下一步：${this.state.truth.nextAction}。你可以让我分析产物（在交易室里点"拉入私区讨论"）、起草客户话术，或在结构审批阶段提出流程偏离。`,
+    })
+  }
+
+  /** 正向门：发布草稿到交易室——显式确认，仅发布内容进入共享上下文与审计 */
+  publishDraft(msgId: string) {
+    this.set({ pendingDraftId: msgId })
+    this.requestConfirm({
+      key: 'publishPrivateDraft',
+      title: '发布到交易室 Publish to Trade Room',
+      summary: ['仅发布内容进入共享上下文并留痕', '你与 agent 的讨论过程保留在私有工作区，不发布、不落审计'],
+      consequence: '发布是跨越私有/共享边界的显式动作，将以你的名义计入交易室时间线与审计日志。',
+      confirmLabel: '发布',
+    })
+  }
+
+  private doPublishDraft() {
+    const role = this.state.role
+    const msgs = this.state.privateChats[role]
+    const m = msgs.find((x) => x.id === this.state.pendingDraftId)
+    if (!m?.draft || m.draft.published) return
+    this.postTradeRoomMessage(m.draft.text)
+    this.addAudit({
+      time: fmtClock(),
+      actor: PEOPLE[role].name,
+      actorRole: PEOPLE[role].roleLabel,
+      action: '发布私区草稿到交易室（仅发布内容进入共享上下文）',
+      priorState: this.state.truth.status,
+      newState: this.state.truth.status,
+    })
+    this.set({
+      pendingDraftId: null,
+      privateChats: {
+        ...this.state.privateChats,
+        [role]: msgs.map((x) => (x.id === m.id ? { ...x, draft: { ...x.draft!, published: true } } : x)),
+      },
+    })
+  }
+
   reset() {
     this.epoch++
     this.timers.forEach(clearTimeout)
@@ -578,6 +684,7 @@ class Store {
       confirmNeed: () => this.doConfirmNeed(),
       approveStructure: () => this.doApproveStructure(),
       approveDeviation: () => this.doApproveDeviation(),
+      publishPrivateDraft: () => this.doPublishDraft(),
       acceptPricing: () => this.doAcceptPricing(),
       returnRFQ: () => this.doLoopToStructure('returnRFQ', 'Dealer 复核 RFQ 后退回：KI 65% 建议复核发行商可行性'),
       modifyFromPricing: () => this.doLoopToStructure('modifyFromPricing', '报价矩阵显示当前结构经济性不足，退回产品专家修改'),

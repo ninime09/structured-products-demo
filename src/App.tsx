@@ -3,6 +3,7 @@ import { useEngine } from './hooks'
 import { AssistantView, TasksView } from './components/Assistant'
 import { ConfirmModal, Drawer, HandoffToast } from './components/Overlays'
 import { AppHeader, CaseDetailsPanel, LeftNav } from './components/Shell'
+import { PrivateSidebar } from './components/PrivateSidebar'
 import { TradeRoom } from './components/TradeRoom'
 
 const NAV_WIDTH_KEY = 'structured-products-nav-width'
@@ -17,7 +18,7 @@ function clampNavWidth(width: number) {
 }
 
 export default function App() {
-  const { view, activeCaseId, detailsCollapsed, role, participants } = useEngine()
+  const { view, activeCaseId, detailsCollapsed, role, participants, privateOpen } = useEngine()
   const [navWidth, setNavWidth] = useState(() => {
     if (typeof window === 'undefined') return NAV_DEFAULT_WIDTH
     const stored = Number(window.localStorage.getItem(NAV_WIDTH_KEY))
@@ -78,7 +79,7 @@ export default function App() {
         />
       )}
       {view === 'room' ? <TradeRoom /> : view === 'assistant' ? <AssistantView /> : <TasksView />}
-      {showCaseDetails ? <CaseDetailsPanel /> : <div />}
+      {showCaseDetails ? (privateOpen ? <PrivateSidebar /> : <CaseDetailsPanel />) : <div />}
       <Drawer />
       <ConfirmModal />
       <HandoffToast />

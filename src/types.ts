@@ -294,6 +294,18 @@ export interface MiniCase {
   attention: 'exception' | 'warning' | 'dot' | null
 }
 
+// ── Private workspace (两区模型：私区跟人走，发布才进公区) ────────────────
+export interface PrivateMsg {
+  id: string
+  who: 'me' | 'agent'
+  time: string
+  text: string
+  /** 反向门：从交易室拉入讨论的产物引用 */
+  quotedArtifactId?: string
+  /** 正向门：agent 起草的待发布内容，发布后才进入交易室与审计 */
+  draft?: { kind: 'roomMessage' | 'deviation'; text: string; published: boolean }
+}
+
 // ── Pending formal action confirmation ──────────────────────────────────
 export interface PendingConfirm {
   key: string
