@@ -159,9 +159,9 @@ function CurrentTruthStrip() {
 // 过滤版时间线：只呈现"人的发言 + 协作类事件 + 分层可见的预分析"。
 // 产物与流程推进由阶段工作台承载，不在此重复。
 function RoomFeed() {
-  const { timeline, role, artifacts, language } = useEngine()
+  const { timeline, role, artifacts, truth, language } = useEngine()
   const zh = language === 'zh'
-  const [expanded, setExpanded] = useState(false)
+  const [showEarlier, setShowEarlier] = useState(false)
   const items = timeline.filter((i) => {
     if (i.kind === 'human') return itemVisibleTo(i, role, artifacts)
     if (i.kind === 'system') return !!i.feed
@@ -169,55 +169,64 @@ function RoomFeed() {
     return false
   })
   if (items.length === 0) return null
-  const shown = expanded ? items : items.slice(-4)
-  const hidden = items.length - shown.length
+  // 按阶段折叠：当前阶段展开，此前阶段收起、按需展开
+  const current = items.filter((i) => !('stage' in i) || i.stage === undefined || i.stage === truth.stage)
+  const earlier = items.filter((i) => 'stage' in i && i.stage !== undefined && i.stage !== truth.stage)
+  const shown = showEarlier ? items : current
+  const renderItem = (item: (typeof items)[number]) => {
+    if (item.kind === 'human') {
+      return (
+        <div className="feed-msg" key={item.id}>
+          <time className="feed-time">{item.time}</time>
+          <span className={`avatar r-${item.author.role}`}>{item.author.initials}</span>
+          <div className="feed-msg-body">
+            <div className="feed-msg-head">
+              <b>{item.author.name}</b>
+              <span className="feed-role">{item.author.roleLabel}</span>
+              {item.via ? <span className="feed-via">{item.via}</span> : null}
+              {item.quote ? <span className="feed-via quote">{zh ? '转述客户' : 'Client relay'}</span> : null}
+            </div>
+            <p>{item.text}</p>
+          </div>
+        </div>
+      )
+    }
+    if (item.kind === 'system') {
+      return (
+        <div className={`feed-sys ${item.tone ?? ''}`} key={item.id}>
+          <time className="feed-time">{item.meta.match(/\d{1,2}:\d{2}/)?.[0] ?? ''}</time>
+          <span className="feed-sys-dot" />
+          <span className="feed-sys-text">{item.text}</span>
+        </div>
+      )
+    }
+    if (item.kind === 'preAnalysis') {
+      return (
+        <div className="feed-pre-row" key={item.id}>
+          <time className="feed-time">{item.time}</time>
+          <div className="feed-pre">
+            <div className="feed-pre-head">
+              <span className="feed-pre-badge">AI</span>
+              <b>{item.targetName} {zh ? '的 agent · 预分析' : "'s agent · pre-analysis"}</b>
+              <span className="feed-pre-vis">{zh ? '仅你与对方可见 · 未确认' : 'visible to you two · unconfirmed'}</span>
+            </div>
+            <p>{item.text}</p>
+          </div>
+        </div>
+      )
+    }
+    return null
+  }
   return (
     <div className="room-feed">
-      {hidden > 0 ? (
-        <button className="feed-more" onClick={() => setExpanded(true)}>{zh ? `查看更早的 ${hidden} 条讨论` : `Show ${hidden} earlier messages`}</button>
+      {earlier.length > 0 ? (
+        <button className="feed-more" onClick={() => setShowEarlier((v) => !v)}>
+          {showEarlier
+            ? zh ? '收起此前阶段的讨论' : 'Collapse earlier stages'
+            : zh ? `此前阶段的 ${earlier.length} 条讨论 ⌄` : `${earlier.length} messages from earlier stages ⌄`}
+        </button>
       ) : null}
-      {shown.map((item) => {
-        if (item.kind === 'human') {
-          return (
-            <div className="feed-msg" key={item.id}>
-              <span className={`avatar r-${item.author.role}`}>{item.author.initials}</span>
-              <div className="feed-msg-body">
-                <div className="feed-msg-head">
-                  <b>{item.author.name}</b>
-                  <span className="feed-role">{item.author.roleLabel}</span>
-                  {item.via ? <span className="feed-via">{item.via}</span> : null}
-                  {item.quote ? <span className="feed-via quote">{zh ? '转述客户' : 'Client relay'}</span> : null}
-                  <time>{item.time}</time>
-                </div>
-                <p>{item.text}</p>
-              </div>
-            </div>
-          )
-        }
-        if (item.kind === 'system') {
-          return (
-            <div className={`feed-sys ${item.tone ?? ''}`} key={item.id}>
-              <span className="feed-sys-dot" />
-              <span>{item.text}</span>
-              <time>{item.meta}</time>
-            </div>
-          )
-        }
-        if (item.kind === 'preAnalysis') {
-          return (
-            <div className="feed-pre" key={item.id}>
-              <div className="feed-pre-head">
-                <span className="feed-pre-badge">AI</span>
-                <b>{item.targetName} {zh ? '的 agent · 预分析' : "'s agent · pre-analysis"}</b>
-                <span className="feed-pre-vis">{zh ? '仅你与对方可见 · 未确认' : 'visible to you two · unconfirmed'}</span>
-                <time>{item.time}</time>
-              </div>
-              <p>{item.text}</p>
-            </div>
-          )
-        }
-        return null
-      })}
+      {shown.map(renderItem)}
     </div>
   )
 }

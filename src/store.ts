@@ -204,6 +204,7 @@ function initialState(): EngineState {
       author: PEOPLE.rm,
       time: '14:02',
       text: CLIENT_MSG,
+      stage: 'need',
     },
     { kind: 'artifact', id: uid('tl'), artifactId: 'art-need', time: '14:03' },
   ]
@@ -310,6 +311,10 @@ class Store {
     this.set({ truth: { ...this.state.truth, ...patch } })
   }
   private push(item: TimelineItem) {
+    // 聊天类条目自动打上所属阶段标记，供 RoomFeed 按阶段折叠
+    if (item.kind === 'human' || item.kind === 'preAnalysis' || item.kind === 'system') {
+      if (item.stage === undefined) item.stage = this.state.truth.stage
+    }
     this.set({ timeline: [...this.state.timeline, item] })
   }
   private putArtifact(a: Artifact) {

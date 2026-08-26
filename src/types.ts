@@ -223,6 +223,8 @@ export type TimelineItem =
       quote?: boolean // relayed client words
       /** 双署名标记，如 "agent 预分析 · 本人确认" */
       via?: string
+      /** 发生时所处阶段（RoomFeed 按阶段折叠用，push 时自动打标） */
+      stage?: StageKey
     }
   | {
       kind: 'system'
@@ -236,6 +238,7 @@ export type TimelineItem =
       audience?: RoleKey[]
       /** 协作类事件：在交易室的过滤版时间线（RoomFeed）中展示 */
       feed?: boolean
+      stage?: StageKey
     }
   | { kind: 'artifact'; id: string; artifactId: string; time: string }
   | {
@@ -249,6 +252,7 @@ export type TimelineItem =
       targetName: string
       text: string
       superseded?: boolean
+      stage?: StageKey
     }
   | { kind: 'processing'; id: string; lines: string[]; doneCount: number }
   | {
