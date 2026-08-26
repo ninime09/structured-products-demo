@@ -26,6 +26,7 @@ import {
   Route,
   Search,
   ShieldCheck,
+  Users,
   WandSparkles,
   Zap,
 } from 'lucide-react'
@@ -147,13 +148,11 @@ export function AppHeader() {
             <>
               {showCase ? <ParticipantsStack /> : null}
               {showCase ? (
-                <button
-                  className="header-tool"
-                  title={zh ? '显示案例详情面板' : 'Show case details panel'}
+                <IconButton
+                  icon={PanelRight}
+                  label={zh ? '案例详情' : 'Case details'}
                   onClick={() => { store.togglePrivate(false); if (detailsCollapsed) store.toggleDetails() }}
-                >
-                  <PanelRight size={16} /> {zh ? '案例详情' : 'Details'}
-                </button>
+                />
               ) : null}
               <HeaderMoreMenu zh={zh} />
             </>
@@ -174,15 +173,18 @@ function ParticipantsStack() {
   const extra = all.length - shown.length
   return (
     <div className="participants-tool">
-      <div className="avatar-stack" title={all.map((p) => `${p.name} · ${p.roleLabel}`).join('\n')}>
+      <div className="avatar-stack">
         {shown.map((p) => (
-          <span key={p.name} className={`avatar r-${p.role}${p.guest ? ' guest' : ''}`}>{p.initials}</span>
+          <span key={p.name} className={`avatar r-${p.role}`} title={`${p.name} · ${p.roleLabel}${p.guest ? (zh ? '（协作者）' : ' (collaborator)') : ''}`}>{p.initials}</span>
         ))}
         {extra > 0 ? <span className="avatar more">+{extra}</span> : null}
       </div>
       <button className="invite-btn" title={zh ? '拉同事加入协作' : 'Invite a colleague'} onClick={() => setOpen((o) => !o)}>
-        <Plus size={13} />
+        <Plus size={14} />
       </button>
+      <span className="participants-count" title={zh ? `共 ${all.length} 位参与者` : `${all.length} participants`}>
+        <Users size={15} /> {all.length}
+      </span>
       {open ? (
         <div className="invite-pop" onMouseLeave={() => setOpen(false)}>
           <div className="invite-pop-head">
