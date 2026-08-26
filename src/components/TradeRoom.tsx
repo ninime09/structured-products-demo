@@ -46,9 +46,13 @@ const WORKING_VIEWERS: Record<Artifact['data']['type'], RoleKey[]> = {
 function itemVisibleTo(item: TimelineItem, role: RoleKey, artifacts: Record<string, Artifact>): boolean {
   switch (item.kind) {
     case 'human':
-      // 协作者发言全员可见；其余原始消息仍按作者角色隔离。
+      // 房间发言公开（Layer A）；转述客户的原始话术仍按作者角色隔离（Layer C）。
       if (item.author.guest) return true
+      if (!item.quote) return true
       return item.author.role === role
+    case 'preAnalysis':
+      // 分层可见：仅提问者与被 @ 者可见，未确认不进公共层
+      return !item.superseded && (item.asker === role || item.target === role)
     case 'contextBrief':
       // A join brief is addressed to the joining role.
       return item.joiner.role === role
@@ -148,6 +152,72 @@ function CurrentTruthStrip() {
           <span>{zh ? '状态' : 'Status'}</span><strong className={`badge ${truth.statusTone}`}>{truth.statusLabel}</strong>
         </div>
       </div>
+    </div>
+  )
+}
+
+// 过滤版时间线：只呈现"人的发言 + 协作类事件 + 分层可见的预分析"。
+// 产物与流程推进由阶段工作台承载，不在此重复。
+function RoomFeed() {
+  const { timeline, role, artifacts, language } = useEngine()
+  const zh = language === 'zh'
+  const [expanded, setExpanded] = useState(false)
+  const items = timeline.filter((i) => {
+    if (i.kind === 'human') return itemVisibleTo(i, role, artifacts)
+    if (i.kind === 'system') return !!i.feed
+    if (i.kind === 'preAnalysis') return !i.superseded && (i.asker === role || i.target === role)
+    return false
+  })
+  if (items.length === 0) return null
+  const shown = expanded ? items : items.slice(-4)
+  const hidden = items.length - shown.length
+  return (
+    <div className="room-feed">
+      {hidden > 0 ? (
+        <button className="feed-more" onClick={() => setExpanded(true)}>{zh ? `查看更早的 ${hidden} 条讨论` : `Show ${hidden} earlier messages`}</button>
+      ) : null}
+      {shown.map((item) => {
+        if (item.kind === 'human') {
+          return (
+            <div className="feed-msg" key={item.id}>
+              <span className={`avatar r-${item.author.role}`}>{item.author.initials}</span>
+              <div className="feed-msg-body">
+                <div className="feed-msg-head">
+                  <b>{item.author.name}</b>
+                  <span className="feed-role">{item.author.roleLabel}</span>
+                  {item.via ? <span className="feed-via">{item.via}</span> : null}
+                  {item.quote ? <span className="feed-via quote">{zh ? '转述客户' : 'Client relay'}</span> : null}
+                  <time>{item.time}</time>
+                </div>
+                <p>{item.text}</p>
+              </div>
+            </div>
+          )
+        }
+        if (item.kind === 'system') {
+          return (
+            <div className={`feed-sys ${item.tone ?? ''}`} key={item.id}>
+              <span className="feed-sys-dot" />
+              <span>{item.text}</span>
+              <time>{item.meta}</time>
+            </div>
+          )
+        }
+        if (item.kind === 'preAnalysis') {
+          return (
+            <div className="feed-pre" key={item.id}>
+              <div className="feed-pre-head">
+                <span className="feed-pre-badge">AI</span>
+                <b>{item.targetName} {zh ? '的 agent · 预分析' : "'s agent · pre-analysis"}</b>
+                <span className="feed-pre-vis">{zh ? '仅你与对方可见 · 未确认' : 'visible to you two · unconfirmed'}</span>
+                <time>{item.time}</time>
+              </div>
+              <p>{item.text}</p>
+            </div>
+          )
+        }
+        return null
+      })}
     </div>
   )
 }
@@ -261,6 +331,7 @@ export function TradeRoom() {
         {sourceReview ? <NeedReviewWorkspace /> : dedicatedStage ? (
           <>
             <CurrentTruthStrip />
+            <RoomFeed />
             <StageWorkspace />
           </>
         ) : (
@@ -381,6 +452,8 @@ export function TradeRoom() {
                     <ArtifactCard artifactId={item.artifactId} />
                   </div>
                 )
+              case 'preAnalysis':
+                return null
             }
           })}
           {truth.status === 'COMPLETED' && (

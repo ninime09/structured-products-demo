@@ -519,6 +519,10 @@ class Store {
       time: tick(),
       text: body,
     })
+    // @ 某人：内核给对方的 agent 派预处理任务（回执进公共层，预分析分层可见）。
+    const mentionTarget = [...Object.values(PEOPLE), ...INVITABLE.map((c) => c.person)]
+      .find((p) => body.includes('@' + p.name) && p.name !== author.name)
+    if (mentionTarget) this.handleMention(author, mentionTarget, body)
     // 自然语言流程偏离：结构审批阶段，识别"跳过/直连询价"类请求 → AI 起草偏离卡。
     if (
       this.state.truth.status === 'STRUCTURE_REVIEW' &&
@@ -548,7 +552,7 @@ class Store {
               approver: 'David · 产品专家',
             },
           })
-          this.systemEvent('flag', 'AI 起草了流程偏离卡：跳过结构对比，需产品专家确认', `AI · ${ct}`, 'warning')
+          this.push({ kind: 'system', id: uid('tl'), icon: 'flag', text: 'AI 起草了流程偏离卡：跳过结构对比，需产品专家确认', meta: `AI · ${ct}`, tone: 'warning', feed: true })
           this.addAudit({
             time: ct,
             actor: 'AI Copilot',
@@ -562,6 +566,49 @@ class Store {
     }
   }
   // ── 私有工作区（两区模型）────────────────────────────────────────────
+  /** @ 流程的预分析内容（演示用脚本；真实版由运行时层承接） */
+  private preAnalysisText(question: string): string {
+    if (/65|KI|敲入/i.test(question)) {
+      return '初步分析（基于报价矩阵与批准结构）：KI 从 70% 压到 65% 约压低票息 25–35bp（参考方案 B 调整时 10.5% → 10.2%）；MS / JPM / GS 均可按 65% 报价。注意：需产品专家重新审批结构后才能正式询价。'
+    }
+    if (/BNP|不可比/i.test(question)) {
+      return '初步分析：BNP 报价条款与批准结构不符（KI 差 5 个点），已被隔离在不可比区；若要采纳需退回结构重审，不能直接用于客户报价。'
+    }
+    return `初步分析：当前案例处于「${this.state.truth.statusLabel}」，下一步为 ${this.state.truth.nextAction}。我已整理相关产物与依赖，待你补充判断。`
+  }
+
+  /** @ 某人：回执进公共层；agent 预分析分层可见（仅提问者与被 @ 者）；
+   *  预分析同时作为草稿进入被 @ 者私区，本人确认后以双署名发布。 */
+  private handleMention(asker: Person, target: Person, question: string) {
+    const t = tick()
+    this.push({ kind: 'system', id: uid('tl'), icon: 'send', text: `${target.name} 的 agent 正在预分析 · 待 ${target.name} 确认后回复`, meta: `${asker.name} @ ${target.name} · ${t}`, tone: 'neutral', feed: true })
+    if (target.guest) {
+      // 协作者是脚本化人格：延迟后直接以双署名回复（发言全员可见）
+      this.later(1600, () => {
+        this.push({ kind: 'human', id: uid('tl'), author: target, time: tick(), text: this.preAnalysisText(question), via: 'agent 预分析 · 本人确认' })
+      })
+      return
+    }
+    const analysis = this.preAnalysisText(question)
+    this.later(1100, () => {
+      const ct = tick()
+      const paId = uid('pa')
+      this.push({ kind: 'preAnalysis', id: paId, time: ct, asker: asker.role, target: target.role, targetName: target.name, text: analysis })
+      // 草稿进被 @ 者私区，等本人确认发布
+      this.pushPrivate(target.role, {
+        id: uid('pm'), who: 'agent', time: ct,
+        text: `${asker.name} @ 了你：「${question.slice(0, 60)}」。我做了预分析（提问者已可见），你确认或修改后发布为正式回复：`,
+        draft: { kind: 'reply', text: analysis, published: false, preAnalysisId: paId },
+      })
+      this.set({
+        notifications: [...this.state.notifications, {
+          id: uid('ntf'), role: target.role, caseId: this.state.truth.caseId,
+          title: `${asker.name} @ 了你`, body: question.slice(0, 50), time: ct, read: false,
+        }],
+      })
+    })
+  }
+
   /** 拉同事加入协作：可参与讨论，不占正式审批角色，全程留痕 */
   invitePerson(name: string) {
     const c = INVITABLE.find((x) => x.person.name === name)
@@ -569,7 +616,7 @@ class Store {
     const t = tick()
     const host = PEOPLE[this.state.role]
     this.set({ invited: [...this.state.invited, { person: c.person, joinedAt: t }] })
-    this.systemEvent('send', `${host.name} 拉 ${c.person.name} · ${c.person.roleLabel} 加入协作（可参与讨论，不占审批角色）`, `${host.name} · ${t}`)
+    this.push({ kind: 'system', id: uid('tl'), icon: 'send', text: `${host.name} 拉 ${c.person.name} · ${c.person.roleLabel} 加入协作（可参与讨论，不占审批角色）`, meta: `${host.name} · ${t}`, tone: 'neutral', feed: true })
     this.addAudit({
       time: t,
       actor: host.name,
@@ -680,7 +727,16 @@ class Store {
     const msgs = this.state.privateChats[role]
     const m = msgs.find((x) => x.id === this.state.pendingDraftId)
     if (!m?.draft || m.draft.published) return
-    this.postTradeRoomMessage(m.draft.text)
+    if (m.draft.kind === 'reply') {
+      // 双署名正式回复：升级到公共层，预分析标记为已被取代
+      const paId = m.draft.preAnalysisId
+      this.push({ kind: 'human', id: uid('tl'), author: PEOPLE[role], time: tick(), text: m.draft.text, via: 'agent 预分析 · 本人确认' })
+      if (paId) {
+        this.set({ timeline: this.state.timeline.map((i) => (i.kind === 'preAnalysis' && i.id === paId ? { ...i, superseded: true } : i)) })
+      }
+    } else {
+      this.postTradeRoomMessage(m.draft.text)
+    }
     this.addAudit({
       time: fmtClock(),
       actor: PEOPLE[role].name,

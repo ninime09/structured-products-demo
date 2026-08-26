@@ -221,6 +221,8 @@ export type TimelineItem =
       time: string
       text: string
       quote?: boolean // relayed client words
+      /** 双署名标记，如 "agent 预分析 · 本人确认" */
+      via?: string
     }
   | {
       kind: 'system'
@@ -232,8 +234,22 @@ export type TimelineItem =
       // If set, only these roles see the event (e.g. hide a handoff event
       // from the joiner whose Context Brief restates it).
       audience?: RoleKey[]
+      /** 协作类事件：在交易室的过滤版时间线（RoomFeed）中展示 */
+      feed?: boolean
     }
   | { kind: 'artifact'; id: string; artifactId: string; time: string }
+  | {
+      // @ 某人后其 agent 的预分析：分层可见（仅提问者与被 @ 者），
+      // 未经本人确认不进入公共层；确认发布后标记 superseded。
+      kind: 'preAnalysis'
+      id: string
+      time: string
+      asker: RoleKey
+      target: RoleKey
+      targetName: string
+      text: string
+      superseded?: boolean
+    }
   | { kind: 'processing'; id: string; lines: string[]; doneCount: number }
   | {
       // Blocking human action that has no artifact card of its own (e.g. live requote).
@@ -305,7 +321,7 @@ export interface PrivateMsg {
   /** 反向门：从交易室拉入讨论的产物引用 */
   quotedArtifactId?: string
   /** 正向门：agent 起草的待发布内容，发布后才进入交易室与审计 */
-  draft?: { kind: 'roomMessage' | 'deviation'; text: string; published: boolean }
+  draft?: { kind: 'roomMessage' | 'deviation' | 'reply'; text: string; published: boolean; preAnalysisId?: string }
 }
 
 // ── Pending formal action confirmation ──────────────────────────────────
