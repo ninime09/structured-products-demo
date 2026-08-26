@@ -244,7 +244,7 @@ export function TradeRoom() {
           onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
           onDrop={(e) => { e.preventDefault(); store.dropDraftToRoom(dragging.id) }}
         >
-          <span>松手 · 发布到交易室（将弹出确认）</span>
+          <span>松手发布到交易室（需确认）</span>
         </div>
       ) : null}
       <div className="main-inner">

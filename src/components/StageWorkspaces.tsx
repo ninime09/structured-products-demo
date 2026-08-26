@@ -18,6 +18,7 @@ import { store, useEngine } from '../hooks'
 import { FCN_WORKFLOW } from '../config/fcn-pack/workflow'
 import type { Artifact, TermRow } from '../types'
 import { confirmThen } from './confirm'
+import { setDragGhost } from './dragGhost'
 import { Button, Panel, Tag } from './primitives'
 import { ActionBtn, Countdown, StatusBadge } from './ui'
 
@@ -66,7 +67,7 @@ function StageCard({
         className="stage-card-head"
         draggable={!!dragArtifactId}
         title={dragArtifactId ? '按住拖到右侧 → 拉入私有工作区讨论' : undefined}
-        onDragStart={dragArtifactId ? (e) => { e.dataTransfer.setData('text/plain', dragArtifactId); e.dataTransfer.effectAllowed = 'copy'; store.setDragging({ kind: 'artifact', id: dragArtifactId }) } : undefined}
+        onDragStart={dragArtifactId ? (e) => { e.dataTransfer.setData('text/plain', dragArtifactId); e.dataTransfer.effectAllowed = 'copy'; setDragGhost(e, `⇢ ${title}`); store.setDragging({ kind: 'artifact', id: dragArtifactId }) } : undefined}
         onDragEnd={dragArtifactId ? () => store.setDragging(null) : undefined}
       >
         <span className="stage-card-icon">{icon}</span>

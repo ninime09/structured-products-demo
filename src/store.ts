@@ -588,6 +588,9 @@ class Store {
     if (!a) return
     const role = this.state.role
     this.set({ privateOpen: true })
+    const chat = this.state.privateChats[role]
+    const last = chat[chat.length - 1]
+    if (last?.quotedArtifactId === artifactId) return // 已在讨论中，避免重复拉入
     let text = `已读取「${a.titleZh}」v${a.version}。想让我分析什么？`
     if (a.data.type === 'quoteMatrix') {
       text = `已读取报价矩阵 v${a.version}：Morgan Stanley 10.62% 为最优可比；BNP 票息 10.85% 更高，但 KI 65% ≠ 批准结构的 70%，条款不可比，不能直接用于客户报价。要我解释原因，或起草给客户的说明吗？`

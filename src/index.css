@@ -2347,10 +2347,11 @@ button:disabled { cursor: not-allowed; }
 
 /* 双向拖拽投放区 */
 .trade-main { position: relative; }
-.drop-zone { display: flex; align-items: center; justify-content: center; border: 2.5px dashed #6b4fae; background: rgba(107, 79, 174, 0.09); color: #6b4fae; font-weight: 700; font-size: 14.5px; border-radius: 14px; z-index: 80; pointer-events: auto; }
-.drop-zone span { background: #faf8ff; border: 1px solid #cbbcec; border-radius: 10px; padding: 10px 18px; box-shadow: 0 4px 18px rgba(107, 79, 174, 0.18); }
+.drop-zone { display: flex; align-items: center; justify-content: center; border: 1.5px dashed #8f76cf; background: rgba(107, 79, 174, 0.06); color: #6b4fae; font-weight: 600; font-size: 12.5px; border-radius: 12px; z-index: 80; pointer-events: auto; }
+.drop-zone span { background: #faf8ff; border: 1px solid #d5c9ef; border-radius: 8px; padding: 5px 12px; box-shadow: 0 2px 10px rgba(107, 79, 174, 0.12); }
 .right-drop { position: fixed; top: 66px; right: 8px; bottom: 8px; width: 384px; }
 .room-drop { position: absolute; inset: 12px; }
+.drag-ghost { position: absolute; top: -1000px; left: -1000px; background: #6b4fae; color: #fff; font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 14px; white-space: nowrap; pointer-events: none; }
 .stage-card-head[draggable="true"] { cursor: grab; }
 .stage-card-head[draggable="true"]:active { cursor: grabbing; }
 .ps-draft[draggable="true"] { cursor: grab; }

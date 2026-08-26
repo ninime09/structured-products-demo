@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { store, useEngine } from './hooks'
 import { AssistantView, TasksView } from './components/Assistant'
 import { ConfirmModal, Drawer, HandoffToast } from './components/Overlays'
@@ -15,6 +15,28 @@ const NAV_COLLAPSED_WIDTH = 68
 
 function clampNavWidth(width: number) {
   return Math.min(NAV_MAX_WIDTH, Math.max(NAV_MIN_WIDTH, Math.round(width)))
+}
+
+// 反向门投放区：实测右栏（案例详情或私区侧栏）的几何位置，保证贴合。
+function RightDropZone({ artifactId }: { artifactId: string }) {
+  const [rect, setRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null)
+  useEffect(() => {
+    const el = document.querySelector('.private-sidebar, aside.details')
+    if (el) {
+      const r = el.getBoundingClientRect()
+      setRect({ top: r.top + 6, left: r.left + 6, width: r.width - 12, height: r.height - 12 })
+    }
+  }, [])
+  return (
+    <div
+      className="drop-zone right-drop"
+      style={rect ?? undefined}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }}
+      onDrop={(e) => { e.preventDefault(); store.dropArtifactToPrivate(artifactId) }}
+    >
+      <span>松手拉入私区</span>
+    </div>
+  )
 }
 
 export default function App() {
@@ -80,15 +102,7 @@ export default function App() {
       )}
       {view === 'room' ? <TradeRoom /> : view === 'assistant' ? <AssistantView /> : <TasksView />}
       {showCaseDetails ? (privateOpen ? <PrivateSidebar /> : <CaseDetailsPanel />) : <div />}
-      {dragging?.kind === 'artifact' ? (
-        <div
-          className="drop-zone right-drop"
-          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }}
-          onDrop={(e) => { e.preventDefault(); store.dropArtifactToPrivate(dragging.id) }}
-        >
-          <span>松手 · 拉入私有工作区讨论</span>
-        </div>
-      ) : null}
+      {dragging?.kind === 'artifact' ? <RightDropZone artifactId={dragging.id} /> : null}
       <Drawer />
       <ConfirmModal />
       <HandoffToast />

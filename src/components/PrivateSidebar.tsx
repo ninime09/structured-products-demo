@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { CornerDownRight, Lock, Send, Sparkles, X } from 'lucide-react'
 import { PEOPLE } from '../data'
 import { store, useEngine } from '../hooks'
+import { setDragGhost } from './dragGhost'
 
 // 私有工作区侧栏：私区跟人走（按角色隔离），公区跟 case 走。
 // 讨论过程不进交易室、不落审计；只有"发布"跨越边界。
@@ -49,7 +50,7 @@ export function PrivateSidebar() {
                   className={`ps-draft${m.draft.published ? ' published' : ''}`}
                   draggable={!m.draft.published}
                   title={m.draft.published ? undefined : '按住拖到左侧交易室 → 发布（需确认）'}
-                  onDragStart={m.draft.published ? undefined : (e) => { e.dataTransfer.setData('text/plain', m.id); e.dataTransfer.effectAllowed = 'move'; store.setDragging({ kind: 'draft', id: m.id }) }}
+                  onDragStart={m.draft.published ? undefined : (e) => { e.dataTransfer.setData('text/plain', m.id); e.dataTransfer.effectAllowed = 'move'; setDragGhost(e, '⇢ 草稿 · 发布到交易室'); store.setDragging({ kind: 'draft', id: m.id }) }}
                   onDragEnd={() => store.setDragging(null)}
                 >
                   <div className="ps-draft-label">{m.draft.kind === 'deviation' ? '草稿 · 流程偏离请求' : '草稿 · 交易室消息'}</div>
