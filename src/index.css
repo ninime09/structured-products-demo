@@ -2415,3 +2415,13 @@ button:disabled { cursor: not-allowed; }
 .feed-pre-badge { background: #6b4fae; color: #fff; font-size: 9px; font-weight: 700; border-radius: 6px; padding: 1px 6px; }
 .feed-pre-vis { color: #8a79b8; font-size: 10.5px; }
 .feed-pre p { margin: 5px 0 0; font-size: 12.5px; line-height: 1.6; color: #444; }
+
+/* 交易室输入框弹层 */
+.trade-composer-tools { position: relative; }
+.composer-pop { position: absolute; bottom: 42px; left: 0; width: 300px; background: #fff; border: 1px solid #dfe4ea; border-radius: 12px; box-shadow: 0 -6px 28px rgba(20, 30, 50, 0.14); padding: 8px; z-index: 70; }
+.composer-pop-head { font-size: 11.5px; color: #8a93a0; font-weight: 600; padding: 4px 8px 8px; }
+.composer-pop > button { display: flex; align-items: center; gap: 9px; width: 100%; border: 0; background: none; padding: 7px 8px; border-radius: 8px; cursor: pointer; text-align: left; color: #66707d; }
+.composer-pop > button:hover { background: #f4f6f9; }
+.composer-pop .avatar { width: 26px; height: 26px; border-radius: 50%; font-size: 10.5px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+.cp-name { flex: 1; font-size: 12.5px; font-weight: 600; color: #1f252e; line-height: 1.3; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-name small { display: block; font-size: 10.5px; color: #8a93a0; font-weight: 500; }

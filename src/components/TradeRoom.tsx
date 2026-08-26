@@ -242,27 +242,68 @@ function StageWorkspace() {
 }
 
 function TradeComposer() {
-  const { language } = useEngine()
+  const { language, role, invited } = useEngine()
   const zh = language === 'zh'
   const [message, setMessage] = useState('')
+  const [pop, setPop] = useState<'mention' | 'attach' | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const send = () => {
     if (!message.trim()) return
     store.postTradeRoomMessage(message)
     setMessage('')
+    setPop(null)
   }
+  const insert = (text: string) => {
+    setMessage((m) => (m ? m.replace(/\s*$/, ' ') : '') + text)
+    setPop(null)
+    inputRef.current?.focus()
+  }
+  // 可 @ 的人：四个正式角色（除自己）+ 已拉入的协作者
+  const mentionables = [
+    ...Object.values(PEOPLE).filter((p) => p.role !== role),
+    ...invited.map((i) => i.person),
+  ]
+  const DEMO_ATTACHMENTS = [
+    { name: '客户邮件 email-20250516-1402.eml', note: zh ? '需求来源' : 'source email' },
+    { name: '电话录音 rec-20260525-1436.mp3', note: zh ? '客户确认留痕' : 'confirmation record' },
+    { name: '发行商 Final Termsheet.pdf', note: zh ? '待核对' : 'to validate' },
+  ]
   return (
     <div className="trade-composer">
       <div className="trade-composer-tools">
-        <IconButton icon={Paperclip} label={zh ? '添加附件' : 'Attach file'} />
-        <IconButton icon={Table2} label={zh ? '插入表格' : 'Insert table'} />
-        <IconButton icon={AtSign} label={zh ? '提及参与者' : 'Mention participant'} />
-        <IconButton icon={WandSparkles} label={zh ? '使用技能' : 'Use skill'} />
+        <IconButton icon={Paperclip} label={zh ? '添加附件' : 'Attach file'} onClick={() => setPop(pop === 'attach' ? null : 'attach')} />
+        <IconButton icon={Table2} label={zh ? '插入已批准条款表' : 'Insert approved terms'} onClick={() => insert(zh ? '[表格 · 已批准条款 Strike 80% / KI 70% / 6M] ' : '[Table · Approved terms 80%/70%/6M] ')} />
+        <IconButton icon={AtSign} label={zh ? '提及参与者' : 'Mention participant'} onClick={() => setPop(pop === 'mention' ? null : 'mention')} />
+        <IconButton icon={WandSparkles} label={zh ? '使用技能' : 'Use skill'} onClick={() => store.openDrawer({ type: 'skills' })} />
+        {pop === 'mention' ? (
+          <div className="composer-pop" onMouseLeave={() => setPop(null)}>
+            <div className="composer-pop-head">{zh ? '提及参与者（对方 agent 会先预分析）' : 'Mention (their agent pre-analyzes first)'}</div>
+            {mentionables.map((p) => (
+              <button key={p.name} onClick={() => insert(`@${p.name} `)}>
+                <span className={`avatar r-${p.role}`}>{p.initials}</span>
+                <span className="cp-name">{p.name}<small>{p.roleLabel}</small></span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {pop === 'attach' ? (
+          <div className="composer-pop" onMouseLeave={() => setPop(null)}>
+            <div className="composer-pop-head">{zh ? '添加附件（演示）' : 'Attach (demo)'}</div>
+            {DEMO_ATTACHMENTS.map((a) => (
+              <button key={a.name} onClick={() => insert(`[附件 · ${a.name}] `)}>
+                <Paperclip size={13} />
+                <span className="cp-name">{a.name}<small>{a.note}</small></span>
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
       <input
+        ref={inputRef}
         value={message}
         onChange={(event) => setMessage(event.target.value)}
         onKeyDown={(event) => event.key === 'Enter' && send()}
-        placeholder={zh ? '给交易室发送消息...' : 'Message Trade Room...'}
+        placeholder={zh ? '给交易室发送消息，@ 某人可让其 agent 先预分析...' : 'Message Trade Room, @someone for agent pre-analysis...'}
         aria-label={zh ? '给交易室发送消息' : 'Message Trade Room'}
       />
       <IconButton icon={Send} label={zh ? '发送消息' : 'Send message'} className="trade-send" onClick={send} />
