@@ -169,7 +169,7 @@ function ParticipantsStack() {
   const zh = language === 'zh'
   const [open, setOpen] = useState(false)
   const all = [...participants.map((p) => p.person), ...invited.map((i) => i.person)]
-  const shown = all.slice(0, 4)
+  const shown = all.slice(0, 3)
   const extra = all.length - shown.length
   return (
     <div className="participants-tool">
