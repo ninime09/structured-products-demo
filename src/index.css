@@ -2382,6 +2382,7 @@ button:disabled { cursor: not-allowed; }
 .header-menu hr { border: 0; border-top: 1px solid #edf0f4; margin: 5px 2px; }
 
 /* 案例详情抽屉复用面板样式 */
+.drawer.drawer-case { width: min(460px, calc(100vw - 48px)); }
 .drawer-case .details { grid-area: auto; border-left: 0; padding: 4px 2px; }
 .drawer-case .rail-toggle { display: none; }
 .drawer-case .details-bar { display: none; }
