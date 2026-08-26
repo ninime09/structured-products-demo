@@ -2355,3 +2355,29 @@ button:disabled { cursor: not-allowed; }
 .stage-card-head[draggable="true"] { cursor: grab; }
 .stage-card-head[draggable="true"]:active { cursor: grabbing; }
 .ps-draft[draggable="true"] { cursor: grab; }
+
+/* 顶栏参与者头像组与拉人弹层 */
+.participants-tool { position: relative; display: flex; align-items: center; gap: 7px; margin-right: 2px; }
+.avatar-stack { display: flex; align-items: center; }
+.avatar-stack .avatar { width: 26px; height: 26px; font-size: 10.5px; border: 2px solid #fff; margin-left: -7px; box-shadow: 0 1px 3px rgba(20, 30, 50, 0.12); }
+.avatar-stack .avatar:first-child { margin-left: 0; }
+.avatar-stack .avatar.more { background: #eef1f5; color: #66707d; font-weight: 700; }
+.avatar.guest { outline: 1.5px dashed #b9a7e6; outline-offset: 1px; }
+.invite-btn { width: 24px; height: 24px; border-radius: 50%; border: 1.5px dashed #b6bfc9; background: #fff; color: #66707d; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.invite-btn:hover { border-color: #6b4fae; color: #6b4fae; background: #faf8ff; }
+.invite-pop { position: absolute; top: 34px; right: 0; width: 264px; background: #fff; border: 1px solid #dfe4ea; border-radius: 12px; box-shadow: 0 10px 32px rgba(20, 30, 50, 0.14); padding: 8px; z-index: 90; }
+.invite-pop-head { font-size: 12.5px; font-weight: 700; padding: 6px 8px 8px; }
+.invite-pop-head span { display: block; font-size: 10.5px; color: #8a93a0; font-weight: 500; margin-top: 1px; }
+.invite-pop > button { display: flex; align-items: center; gap: 9px; width: 100%; border: 0; background: none; padding: 7px 8px; border-radius: 8px; cursor: pointer; text-align: left; color: #66707d; }
+.invite-pop > button:hover:not(:disabled) { background: #f4f6f9; }
+.invite-pop > button:disabled { opacity: 0.55; cursor: default; }
+.invite-pop .avatar { width: 26px; height: 26px; font-size: 10.5px; flex: none; }
+.invite-name { flex: 1; font-size: 12.5px; font-weight: 600; color: #1f252e; line-height: 1.3; }
+.invite-name small { display: block; font-size: 10.5px; color: #8a93a0; font-weight: 500; }
+.invite-pop .joined { font-size: 10.5px; color: #58a06c; }
+/* 顶栏 ⋯ 菜单 */
+.header-more { position: relative; }
+.header-menu { position: absolute; top: 34px; right: 0; width: 148px; background: #fff; border: 1px solid #dfe4ea; border-radius: 10px; box-shadow: 0 10px 32px rgba(20, 30, 50, 0.14); padding: 6px; z-index: 90; }
+.header-menu button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; padding: 7px 9px; border-radius: 7px; cursor: pointer; font-size: 12.5px; color: #1f252e; }
+.header-menu button:hover { background: #f4f6f9; }
+.header-menu hr { border: 0; border-top: 1px solid #edf0f4; margin: 5px 2px; }

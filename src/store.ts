@@ -1,4 +1,4 @@
-import { PEOPLE } from './data'
+import { INVITABLE, PEOPLE } from './data'
 import { FCN_WORKFLOW } from './config/fcn-pack/workflow'
 import { FCN_ISSUERS, TS_VALIDATION_FIELDS } from './config/fcn-pack/schemas'
 import { POLICIES } from './config/fcn-pack/policies'
@@ -49,6 +49,7 @@ export interface EngineState {
   privateChats: Record<RoleKey, PrivateMsg[]>
   pendingDraftId: string | null
   dragging: { kind: 'artifact' | 'draft'; id: string } | null
+  invited: { person: Person; joinedAt: string }[]
 }
 
 type Listener = () => void
@@ -266,6 +267,7 @@ function initialState(): EngineState {
     privateChats: { rm: [], ps: [], dealer: [], ops: [] },
     pendingDraftId: null,
     dragging: null,
+    invited: [],
   }
 }
 
@@ -560,6 +562,27 @@ class Store {
     }
   }
   // ── 私有工作区（两区模型）────────────────────────────────────────────
+  /** 拉同事加入协作：可参与讨论，不占正式审批角色，全程留痕 */
+  invitePerson(name: string) {
+    const c = INVITABLE.find((x) => x.person.name === name)
+    if (!c || this.state.invited.some((i) => i.person.name === name)) return
+    const t = tick()
+    const host = PEOPLE[this.state.role]
+    this.set({ invited: [...this.state.invited, { person: c.person, joinedAt: t }] })
+    this.systemEvent('send', `${host.name} 拉 ${c.person.name} · ${c.person.roleLabel} 加入协作（可参与讨论，不占审批角色）`, `${host.name} · ${t}`)
+    this.addAudit({
+      time: t,
+      actor: host.name,
+      actorRole: host.roleLabel,
+      action: `邀请协作者 ${c.person.name}（${c.person.roleLabel}）加入交易室`,
+      priorState: this.state.truth.status,
+      newState: this.state.truth.status,
+    })
+    this.later(900, () => {
+      this.push({ kind: 'human', id: uid('tl'), author: c.person, time: tick(), text: c.greeting })
+    })
+  }
+
   setDragging(d: { kind: 'artifact' | 'draft'; id: string } | null) {
     this.set({ dragging: d })
   }

@@ -14,6 +14,13 @@ export const ROLE_SHORT: Record<RoleKey, string> = {
   ops: '簿记 / 核对',
 }
 
+// 可拉入协作的同事：各有擅长，可参与讨论；不占四个正式审批角色。
+export const INVITABLE: { person: Person; note: string; greeting: string }[] = [
+  { person: { name: 'Sam', role: 'ops', roleLabel: '合规 · 协作', initials: 'SA', guest: true }, note: '适当性与留痕', greeting: '收到，我先看下适当性与留痕记录，有需要随时 @ 我。' },
+  { person: { name: 'Leo', role: 'dealer', roleLabel: '交易员 · 协作', initials: 'LE', guest: true }, note: '询价支援', greeting: '在的，询价和报价比较这块我可以搭把手。' },
+  { person: { name: 'Nina', role: 'rm', roleLabel: '运营 · 协作', initials: 'NI', guest: true }, note: '归档与运营', greeting: '运营侧我来盯，归档材料齐不齐我会提前看。' },
+]
+
 // Cases other than the live SP-001, used by nav / assistant / tasks.
 export const OTHER_CASES: MiniCase[] = [
   {

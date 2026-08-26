@@ -46,7 +46,8 @@ const WORKING_VIEWERS: Record<Artifact['data']['type'], RoleKey[]> = {
 function itemVisibleTo(item: TimelineItem, role: RoleKey, artifacts: Record<string, Artifact>): boolean {
   switch (item.kind) {
     case 'human':
-      // Raw client communication belongs to the author's role only.
+      // 协作者发言全员可见；其余原始消息仍按作者角色隔离。
+      if (item.author.guest) return true
       return item.author.role === role
     case 'contextBrief':
       // A join brief is addressed to the joining role.

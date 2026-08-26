@@ -19,6 +19,8 @@ import {
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelRight,
+  RotateCcw,
   Pin,
   Plus,
   Route,
@@ -27,7 +29,7 @@ import {
   WandSparkles,
   Zap,
 } from 'lucide-react'
-import { OTHER_CASES, PEOPLE } from '../data'
+import { INVITABLE, OTHER_CASES, PEOPLE } from '../data'
 import { store, useEngine } from '../hooks'
 import type { RoleKey, StageKey } from '../types'
 import { IconButton, Tag } from './primitives'
@@ -96,7 +98,7 @@ export function WorkflowTracker() {
 
 // ── Header ───────────────────────────────────────────────────────────────
 export function AppHeader() {
-  const { view, activeCaseId, truth, role, language } = useEngine()
+  const { view, activeCaseId, truth, role, language, detailsCollapsed } = useEngine()
   const zh = language === 'zh'
   const showCase = view === 'room' && activeCaseId === 'SP-001'
   return (
@@ -143,19 +145,90 @@ export function AppHeader() {
             </>
           ) : (
             <>
-              <button className="header-tool" onClick={() => store.openDrawer({ type: 'history' })}>
-                <History size={16} /> {zh ? '历史' : 'History'}
-              </button>
-              <button className="header-tool" onClick={() => store.openDrawer({ type: 'source', payload: { title: 'Source Evidence', body: 'Client email from Mr. Chan and linked case evidence.', meta: 'Source review' } })}>
-                <FileText size={16} /> {zh ? '来源' : 'Sources'}
-              </button>
-              <span className="room-tool-divider" />
-              <IconButton icon={MoreHorizontal} label={zh ? '重置演示' : 'Reset demo'} className="room-more-tool" onClick={() => store.reset()} />
+              {showCase ? <ParticipantsStack /> : null}
+              {showCase ? (
+                <button
+                  className="header-tool"
+                  title={zh ? '显示案例详情面板' : 'Show case details panel'}
+                  onClick={() => { store.togglePrivate(false); if (detailsCollapsed) store.toggleDetails() }}
+                >
+                  <PanelRight size={16} /> {zh ? '案例详情' : 'Details'}
+                </button>
+              ) : null}
+              <HeaderMoreMenu zh={zh} />
             </>
           )}
         </div>
       </div>
     </header>
+  )
+}
+
+// ── 顶栏参与者头像组：最多显示 4 位，溢出折叠 +N；随时拉同事加入协作 ──────
+function ParticipantsStack() {
+  const { participants, invited, language } = useEngine()
+  const zh = language === 'zh'
+  const [open, setOpen] = useState(false)
+  const all = [...participants.map((p) => p.person), ...invited.map((i) => i.person)]
+  const shown = all.slice(0, 4)
+  const extra = all.length - shown.length
+  return (
+    <div className="participants-tool">
+      <div className="avatar-stack" title={all.map((p) => `${p.name} · ${p.roleLabel}`).join('\n')}>
+        {shown.map((p) => (
+          <span key={p.name} className={`avatar r-${p.role}${p.guest ? ' guest' : ''}`}>{p.initials}</span>
+        ))}
+        {extra > 0 ? <span className="avatar more">+{extra}</span> : null}
+      </div>
+      <button className="invite-btn" title={zh ? '拉同事加入协作' : 'Invite a colleague'} onClick={() => setOpen((o) => !o)}>
+        <Plus size={13} />
+      </button>
+      {open ? (
+        <div className="invite-pop" onMouseLeave={() => setOpen(false)}>
+          <div className="invite-pop-head">
+            {zh ? '拉同事加入协作' : 'Invite to collaborate'}
+            <span>{zh ? '可参与讨论 · 不占审批角色' : 'Can join discussion · no approval role'}</span>
+          </div>
+          {INVITABLE.map((c) => {
+            const joined = invited.some((i) => i.person.name === c.person.name)
+            return (
+              <button key={c.person.name} disabled={joined} onClick={() => { store.invitePerson(c.person.name); setOpen(false) }}>
+                <span className={`avatar r-${c.person.role} guest`}>{c.person.initials}</span>
+                <span className="invite-name">
+                  {c.person.name} · {c.person.roleLabel}
+                  <small>{c.note}</small>
+                </span>
+                {joined ? <small className="joined">{zh ? '已加入' : 'Joined'}</small> : <Plus size={12} />}
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+// ── 顶栏 ⋯ 菜单：低频取证与演示工具收纳于此 ─────────────────────────────
+function HeaderMoreMenu({ zh }: { zh: boolean }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="header-more">
+      <IconButton icon={MoreHorizontal} label={zh ? '更多操作' : 'More actions'} onClick={() => setOpen((o) => !o)} />
+      {open ? (
+        <div className="header-menu" onMouseLeave={() => setOpen(false)}>
+          <button onClick={() => { store.openDrawer({ type: 'history' }); setOpen(false) }}>
+            <History size={14} /> {zh ? '历史' : 'History'}
+          </button>
+          <button onClick={() => { store.openDrawer({ type: 'source', payload: { title: 'Source Evidence', body: 'Client email from Mr. Chan and linked case evidence.', meta: 'Source review' } }); setOpen(false) }}>
+            <FileText size={14} /> {zh ? '来源' : 'Sources'}
+          </button>
+          <hr />
+          <button onClick={() => { store.reset(); setOpen(false) }}>
+            <RotateCcw size={14} /> {zh ? '重置演示' : 'Reset demo'}
+          </button>
+        </div>
+      ) : null}
+    </div>
   )
 }
 

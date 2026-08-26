@@ -7,6 +7,8 @@ export interface Person {
   role: RoleKey
   roleLabel: string
   initials: string
+  /** 受邀协作者：可参与讨论（发言对全员可见），不占正式审批角色 */
+  guest?: boolean
 }
 
 // ── Case truth ───────────────────────────────────────────────────────────
