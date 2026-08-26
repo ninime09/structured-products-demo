@@ -319,13 +319,17 @@ export function TradeRoom() {
   const lastLen = useRef(timeline.length)
 
   useEffect(() => {
-    // New timeline items scroll into view — but never fight an explicit
-    // artifact focus (ArtifactFrame handles its own scroll for that).
-    if (timeline.length > lastLen.current && !focusArtifactId) {
-      endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    // New timeline items scroll into view. Chat-like items (发言/回执/预分析)
+    // always scroll; artifact pushes still defer to an explicit artifact focus.
+    if (timeline.length > lastLen.current) {
+      const last = timeline[timeline.length - 1]
+      const chatLike = last && (last.kind === 'human' || last.kind === 'preAnalysis' || (last.kind === 'system' && last.feed))
+      if (chatLike || !focusArtifactId) {
+        endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+      }
     }
     lastLen.current = timeline.length
-  }, [timeline.length, focusArtifactId])
+  }, [timeline, focusArtifactId])
 
   if (activeCaseId !== 'SP-001') {
     const c = OTHER_CASES.find((x) => x.caseId === activeCaseId)
@@ -369,7 +373,7 @@ export function TradeRoom() {
       <div className="main-inner">
         <div className="trade-scroll-content">
         <div className="trade-room-heading"><MessageSquare size={16} /><strong>{zh ? '交易室' : 'Trade Room'}</strong><ChevronDown size={15} />{sourceReview ? <span className="room-mode">{zh ? '来源核对' : 'Source Review'}</span> : null}<button className="private-toggle" title="私有工作区：和你的 agent 私下讨论，发布后才进入交易室" onClick={() => store.togglePrivate()}><Sparkles size={13} />{zh ? '私有工作区' : 'Private'}</button></div>
-        {sourceReview ? <NeedReviewWorkspace /> : dedicatedStage ? (
+        {sourceReview ? <><NeedReviewWorkspace /><RoomFeed /></> : dedicatedStage ? (
           <>
             <CurrentTruthStrip />
             <RoomFeed />
@@ -504,9 +508,9 @@ export function TradeRoom() {
             </div>
           )}
           </div>
-          <div ref={endRef} />
           </>
         )}
+        <div ref={endRef} />
         </div>
         <TradeComposer />
       </div>
