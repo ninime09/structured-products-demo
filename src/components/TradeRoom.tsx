@@ -130,7 +130,14 @@ function CurrentTruthStrip() {
 
   return (
     <div className="truth-strip">
-      <div className="truth-strip-head"><Pin size={14} />{zh ? '当前事实' : 'Current Truth'}</div>
+      <div className="truth-strip-head">
+        <Pin size={14} />{zh ? '当前事实' : 'Current Truth'}
+        <button className="next-pill" onClick={() => store.openDrawer({ type: 'case' })} title={zh ? '查看案例详情' : 'Open case details'}>
+          <span>{zh ? '下一步' : 'Next'}</span>
+          {truth.currentOwner ? <em className={`np-avatar r-${truth.currentOwner.role}`}>{truth.currentOwner.initials}</em> : null}
+          <b>{truth.nextAction}</b>
+        </button>
+      </div>
       <div className="truth-strip-grid">
         {items.map(([label, itemValue]) => (
           <div className="truth-strip-item" key={label}>
@@ -140,13 +147,6 @@ function CurrentTruthStrip() {
         <div className="truth-strip-item status">
           <span>{zh ? '状态' : 'Status'}</span><strong className={`badge ${truth.statusTone}`}>{truth.statusLabel}</strong>
         </div>
-        <button className="truth-strip-item next-pill" onClick={() => store.openDrawer({ type: 'case' })} title={zh ? '查看案例详情' : 'Open case details'}>
-          <span>{zh ? '下一步' : 'Next'}</span>
-          <strong>
-            {truth.currentOwner ? <em className={`np-avatar r-${truth.currentOwner.role}`}>{truth.currentOwner.initials}</em> : null}
-            <b>{truth.nextAction}</b>
-          </strong>
-        </button>
       </div>
     </div>
   )

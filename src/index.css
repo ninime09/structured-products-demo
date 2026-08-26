@@ -2387,8 +2387,8 @@ button:disabled { cursor: not-allowed; }
 .drawer-case .rail-toggle { display: none; }
 .drawer-case .details-bar { display: none; }
 /* 当前事实条 · 下一步胶囊 */
-.next-pill { border: 1px solid #dbe3ec; background: #f6f9fc; border-radius: 10px; cursor: pointer; text-align: left; }
+.next-pill { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; border: 1px solid #dbe3ec; background: #f6f9fc; border-radius: 16px; padding: 3px 12px; cursor: pointer; font-size: 12px; min-width: 0; }
 .next-pill:hover { border-color: #6b4fae; background: #faf8ff; }
-.next-pill strong { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.next-pill span { color: #8a93a0; font-weight: 600; flex: none; }
 .next-pill .np-avatar { width: 18px; height: 18px; border-radius: 50%; font-size: 9px; font-style: normal; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: none; }
-.next-pill b { font-weight: 650; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.next-pill b { font-weight: 650; color: #1f252e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
