@@ -99,7 +99,7 @@ export function WorkflowTracker() {
 
 // ── Header ───────────────────────────────────────────────────────────────
 export function AppHeader() {
-  const { view, activeCaseId, truth, role, language, detailsCollapsed } = useEngine()
+  const { view, activeCaseId, truth, role, language } = useEngine()
   const zh = language === 'zh'
   const showCase = view === 'room' && activeCaseId === 'SP-001'
   return (
@@ -151,7 +151,7 @@ export function AppHeader() {
                 <IconButton
                   icon={PanelRight}
                   label={zh ? '案例详情' : 'Case details'}
-                  onClick={() => { store.togglePrivate(false); if (detailsCollapsed) store.toggleDetails() }}
+                  onClick={() => store.openDrawer({ type: 'case' })}
                 />
               ) : null}
               <HeaderMoreMenu zh={zh} />

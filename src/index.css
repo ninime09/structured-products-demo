@@ -2380,3 +2380,14 @@ button:disabled { cursor: not-allowed; }
 .header-menu button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; padding: 7px 9px; border-radius: 7px; cursor: pointer; font-size: 12.5px; color: #1f252e; }
 .header-menu button:hover { background: #f4f6f9; }
 .header-menu hr { border: 0; border-top: 1px solid #edf0f4; margin: 5px 2px; }
+
+/* 案例详情抽屉复用面板样式 */
+.drawer-case .details { grid-area: auto; border-left: 0; padding: 4px 2px; }
+.drawer-case .rail-toggle { display: none; }
+.drawer-case .details-bar { display: none; }
+/* 当前事实条 · 下一步胶囊 */
+.next-pill { border: 1px solid #dbe3ec; background: #f6f9fc; border-radius: 10px; cursor: pointer; text-align: left; }
+.next-pill:hover { border-color: #6b4fae; background: #faf8ff; }
+.next-pill strong { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.next-pill .np-avatar { width: 18px; height: 18px; border-radius: 50%; font-size: 9px; font-style: normal; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.next-pill b { font-weight: 650; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

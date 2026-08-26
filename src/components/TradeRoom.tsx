@@ -140,6 +140,13 @@ function CurrentTruthStrip() {
         <div className="truth-strip-item status">
           <span>{zh ? '状态' : 'Status'}</span><strong className={`badge ${truth.statusTone}`}>{truth.statusLabel}</strong>
         </div>
+        <button className="truth-strip-item next-pill" onClick={() => store.openDrawer({ type: 'case' })} title={zh ? '查看案例详情' : 'Open case details'}>
+          <span>{zh ? '下一步' : 'Next'}</span>
+          <strong>
+            {truth.currentOwner ? <em className={`np-avatar r-${truth.currentOwner.role}`}>{truth.currentOwner.initials}</em> : null}
+            <b>{truth.nextAction}</b>
+          </strong>
+        </button>
       </div>
     </div>
   )

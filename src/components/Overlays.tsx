@@ -27,6 +27,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { OTHER_CASES, PEOPLE } from '../data'
 import { transitionMeta } from '../config/fcn-pack/workflow'
+import { CaseDetailsPanel } from './Shell'
 import { SKILL_MANIFESTS } from '../config/fcn-pack/skills'
 import { store, useEngine } from '../hooks'
 import type { RoleKey } from '../types'
@@ -177,7 +178,9 @@ export function Drawer() {
   })
   const modalTitle = drawer.type === 'source'
     ? drawer.payload?.title ?? (zh ? '来源证据' : 'Source Evidence')
-    : drawer.type === 'archive'
+    : drawer.type === 'case'
+      ? zh ? '案例详情' : 'Case Details'
+      : drawer.type === 'archive'
       ? zh ? '已归档案例' : 'Archived Cases'
       : drawer.type === 'skills'
         ? selectedSkill ? zh ? '技能详情' : 'Skill Details' : zh ? '技能' : 'Skills'
@@ -212,7 +215,9 @@ export function Drawer() {
           <IconButton icon={X} label={`${zh ? '关闭' : 'Close'} ${modalTitle}`} onClick={() => { setSelectedSkillId(null); setArchiveQuery(''); store.closeDrawer() }} />
         </div>
         <div className="drawer-body">
-          {drawer.type === 'archive' ? (
+          {drawer.type === 'case' ? (
+            <div className="drawer-case"><CaseDetailsPanel /></div>
+          ) : drawer.type === 'archive' ? (
             <div className="archive-manager">
               <div className="archive-manager-summary">
                 <span className="archive-manager-icon"><Archive size={17} /></span>

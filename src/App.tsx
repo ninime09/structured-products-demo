@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties, type PointerEvent as ReactPoin
 import { store, useEngine } from './hooks'
 import { AssistantView, TasksView } from './components/Assistant'
 import { ConfirmModal, Drawer, HandoffToast } from './components/Overlays'
-import { AppHeader, CaseDetailsPanel, LeftNav } from './components/Shell'
+import { AppHeader, LeftNav } from './components/Shell'
 import { PrivateSidebar } from './components/PrivateSidebar'
 import { TradeRoom } from './components/TradeRoom'
 
@@ -40,7 +40,7 @@ function RightDropZone({ artifactId }: { artifactId: string }) {
 }
 
 export default function App() {
-  const { view, activeCaseId, detailsCollapsed, role, participants, privateOpen, dragging } = useEngine()
+  const { view, activeCaseId, role, participants, privateOpen, dragging } = useEngine()
   const [navWidth, setNavWidth] = useState(() => {
     if (typeof window === 'undefined') return NAV_DEFAULT_WIDTH
     const stored = Number(window.localStorage.getItem(NAV_WIDTH_KEY))
@@ -52,7 +52,8 @@ export default function App() {
   const [resizingNav, setResizingNav] = useState(false)
   const joined = participants.some((p) => p.person.role === role)
   const showCaseDetails = view === 'room' && activeCaseId === 'SP-001' && joined
-  const showDetails = showCaseDetails
+  // 案例详情改为按需抽屉；常驻右栏只留给私有工作区
+  const showDetails = showCaseDetails && privateOpen
   const startResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
     event.preventDefault()
     const startX = event.clientX
@@ -86,7 +87,7 @@ export default function App() {
   }
   return (
     <div
-      className={`app${showCaseDetails && detailsCollapsed ? ' details-rail' : ''}${showDetails ? '' : ' no-details'}${resizingNav ? ' resizing-nav' : ''}${navCollapsed ? ' nav-collapsed' : ''}`}
+      className={`app${showDetails ? '' : ' no-details'}${resizingNav ? ' resizing-nav' : ''}${navCollapsed ? ' nav-collapsed' : ''}`}
       style={{ '--nav-width': `${navCollapsed ? NAV_COLLAPSED_WIDTH : navWidth}px` } as CSSProperties}
     >
       <AppHeader />
@@ -101,7 +102,7 @@ export default function App() {
         />
       )}
       {view === 'room' ? <TradeRoom /> : view === 'assistant' ? <AssistantView /> : <TasksView />}
-      {showCaseDetails ? (privateOpen ? <PrivateSidebar /> : <CaseDetailsPanel />) : <div />}
+      {showDetails ? <PrivateSidebar /> : <div />}
       {dragging?.kind === 'artifact' ? <RightDropZone artifactId={dragging.id} /> : null}
       <Drawer />
       <ConfirmModal />

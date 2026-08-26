@@ -321,6 +321,6 @@ export interface PendingConfirm {
 export type ViewKey = 'room' | 'assistant' | 'tasks'
 
 export interface DrawerState {
-  type: 'source' | 'history' | 'skills' | 'data' | 'archive'
+  type: 'source' | 'history' | 'skills' | 'data' | 'archive' | 'case'
   payload?: { title: string; body: string; meta: string }
 }
