@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   CircleAlert,
   Clock3,
-  ExternalLink,
   FileText,
   Mail,
   MessageSquare,
@@ -12,24 +11,83 @@ import {
   Route,
   ShieldCheck,
   Sparkles,
+  Undo2,
 } from 'lucide-react'
 import { store, useEngine } from '../hooks'
 import { FCN_WORKFLOW } from '../config/fcn-pack/workflow'
-import { NEED_BRIEF_SCHEMA } from '../config/fcn-pack/schemas'
+import { buildNeedFields, originLabel } from '../config/fcn-pack/need-view'
 import { POLICIES } from '../config/fcn-pack/policies'
+import { fieldLabel } from '../config/fcn-pack/field-labels'
 import type { Artifact, RoleKey } from '../types'
 import { Button, Panel, Tag } from './primitives'
 import { confirmThen } from './confirm'
-import { ActionBtn, Countdown, StatusBadge } from './ui'
+import { ActionBtn, StatusBadge, Validity } from './ui'
+import { SourceReviewWorkspace } from './SourceReview'
+import type { SourceDoc } from './SourceReview'
 
 // Statuses that mean "this card is settled history" — collapsed by default
 // so the active artifact stays the visual protagonist of the room.
 const SETTLED = new Set(['APPROVED', 'ACCEPTED', 'SUPERSEDED', 'STALE', 'SENT', 'EXECUTED', 'CONFIRMED', 'VALIDATED', 'EXPIRED'])
 
+// 客户那封原始邮件。正文以前是一句一句手打在 JSX 里的，每个可点高亮还要手写
+// id 和一堆 aria——换第二封邮件就得整段重抄。现在是数据：段落里夹证据片段，
+// 片段的 key 对上右侧字段，联动由 SourceReviewWorkspace 统一接。
+const CLIENT_NEED_EMAIL = (zh: boolean): SourceDoc => ({
+  senderInitials: 'MC',
+  senderName: 'Mr. Chan',
+  toLabel: `${zh ? '收件人' : 'To'}:  Alice (RM)`,
+  time: '14:02',
+  subject: 'Structured idea — USD 1m, 6 months',
+  paragraphs: [
+    ['Hi Alice,'],
+    [
+      'We are looking to deploy around ',
+      { key: 'notional', text: 'USD 1 million', color: 'purple' },
+      ' over roughly ',
+      { key: 'horizon', text: '6 months', color: 'green' },
+      '.',
+    ],
+    ['We are targeting a return of ', { key: 'target', text: 'above 10% p.a.', color: 'orange' }],
+    [
+      'Our risk tolerance is ',
+      { key: 'risk', text: 'moderate', color: 'blue' },
+      ' — we can take some downside, but not a full-loss structure.',
+    ],
+    [
+      'We are ',
+      { key: 'view', text: 'constructive on China internet & tech', color: 'green' },
+      ', but we have not settled on a specific name.',
+    ],
+    [{ plain: 'Please propose what may work and share indicative terms.' }],
+    ['Best regards,', { br: true }, 'Mr. Chan'],
+  ],
+  footLabel: <><Mail size={13} /><span>{zh ? '邮件 · 14:02 收到' : 'Email · Received 14:02'}</span></>,
+  sourceIdLabel: zh ? '来源 ID' : 'Source ID',
+  sourceId: 'email-20250516-1402',
+  missingNotes: {
+    underlying: {
+      tone: 'warn',
+      text: zh
+        ? '客户只给了板块方向，邮件里没有具体标的——标的需要 RM 与产品专家同客户共同界定。'
+        : 'The client gave a theme, not a name. The underlying must be defined jointly by RM and the product specialist with the client.',
+    },
+    liquidity: {
+      tone: 'warn',
+      text: zh ? '原始邮件中未找到流动性偏好的依据。' : 'No source evidence found for Liquidity Preference.',
+    },
+    suitability: {
+      tone: 'ok',
+      text: zh
+        ? '该字段来自 CRM 客户档案，非邮件提取；下单前将再次校验适当性。'
+        : 'This field comes from the CRM client profile, not the email; suitability is re-checked before execution.',
+    },
+  },
+})
+
 const CLIENT_SOURCE_BODY: Record<string, { title: string; body: string; meta: string }> = {
   'art-need': {
     title: 'Source Evidence',
-    body: 'Hi Alice, I have around USD 1 million to invest. I remain positive on Tencent and would consider something around 6 months, targeting more than 10% p.a. I can accept moderate downside risk. Please let me know what may work.',
+    body: 'Hi Alice, we are looking to deploy around USD 1 million over roughly 6 months, targeting a return above 10% p.a. Our risk tolerance is moderate — we can take some downside, but not a full-loss structure. We are constructive on China internet & tech, but we have not settled on a specific name. Please propose what may work and share indicative terms.',
     meta: 'Mr. Chan · Client email · 14:02（原始客户邮件）',
   },
   'art-inst': {
@@ -143,7 +201,7 @@ function FieldRow({ label, value, mono }: { label: string; value: string; mono: 
   const numeric = /[%\d]/.test(value) && value !== '—'
   return (
     <>
-      <span className="fl">{label}</span>
+      <span className="fl">{fieldLabel(label)}</span>
       <span className={`fv${mono && numeric ? ' num' : ''}${value === '—' ? ' missing' : ''}`}>{value}</span>
     </>
   )
@@ -162,7 +220,7 @@ function EvidencePanel({
     <Panel className="source-evidence-panel">
       <div className="source-evidence-head">
         <span><Mail size={14} />{title}</span>
-        <Tag>Source evidence</Tag>
+        <Tag>来源证据</Tag>
       </div>
       <div className="source-evidence-meta">{meta}</div>
       <div className="source-evidence-body">{children}</div>
@@ -171,14 +229,12 @@ function EvidencePanel({
 }
 
 export function NeedReviewWorkspace() {
-  const { artifacts, role, clarified, language } = useEngine()
+  const { artifacts, role, needSettled, language, participants, specialistProposalPublished, rmPushedBack, privateChats, needFieldUpdates } = useEngine()
   const zh = language === 'zh'
-  const [linkedKey, setLinkedKey] = useState<string | null>('notional')
-  const [pulseTarget, setPulseTarget] = useState<{ side: 'source' | 'field'; key: string } | null>(null)
-  const pulseTimer = useRef<number | null>(null)
-  useEffect(() => () => {
-    if (pulseTimer.current !== null) window.clearTimeout(pulseTimer.current)
-  }, [])
+  const specialistJoined = participants.some((p) => p.person.role === 'ps' && !p.person.guest)
+  const clientBriefDrafted = privateChats.rm.some((m) => m.draft?.kind === 'clientBrief')
+  // David 私区还挂着未确认的 v3 时，RM 不能抢跑发客户
+  const specialistDraftPending = privateChats.ps.some((m) => m.draft?.kind === 'specialistProposal' && !m.draft.published)
   const artifact = artifacts['art-need']
   if (!artifact || artifact.data.type !== 'needBrief') return null
   const d = artifact.data
@@ -186,173 +242,146 @@ export function NeedReviewWorkspace() {
   const confirmNeed = () =>
     confirmThen({
       key: 'confirmNeed',
-      title: '确认客户需求 Confirm Client Need',
+      title: '确认客户需求，移交 David？',
       summary: [
-        'Underlying: Tencent / 0700.HK',
+        `Underlying: ${fieldValue('Underlying')}`,
         'Notional: USD 1,000,000',
         'Horizon: ~6M · Target Yield: >10%',
         'Risk Tolerance: Moderate',
       ],
-      consequence: clarified
-        ? '确认后客户需求将成为 Approved 状态，Case 交给 David（产品专家）设计结构。'
-        : '仍有缺失项（流动性偏好）。确认即表示接受缺失项。Case 将交给 David（产品专家）设计结构。',
+      consequence: needSettled
+        ? '把 Alice 与 David 共同界定的需求定为已确认，交给 David 细化成结构方案。'
+        : `还有 ${unresolvedCount} 项未定（${extracted.filter((f) => f.open).map((f) => f.label).join('、')}）。确认即表示这几项留到结构阶段再定。`,
+      ack: needSettled
+        ? '标的与流动性是共创结论、非客户邮件原文，已与客户核对'
+        : '我知道还有未定项，由我和 David 负责补齐',
       confirmLabel: '确认客户需求',
     })
 
-  const activateEvidence = (key: string, origin: 'source' | 'field') => {
-    setLinkedKey(key)
-    setPulseTarget(null)
-    const targetSide = origin === 'source' ? 'field' : 'source'
-    requestAnimationFrame(() => {
-      setPulseTarget({ side: targetSide, key })
-      const targetId = targetSide === 'source' && key === 'liquidity' ? 'source-email-body' : `${targetSide}-evidence-${key}`
-      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
-    })
-    if (pulseTimer.current !== null) window.clearTimeout(pulseTimer.current)
-    pulseTimer.current = window.setTimeout(() => setPulseTarget(null), 850)
-  }
-
-  const evidenceKeyDown = (event: React.KeyboardEvent, key: string, origin: 'source' | 'field') => {
-    if (event.key !== 'Enter' && event.key !== ' ') return
-    event.preventDefault()
-    activateEvidence(key, origin)
-  }
-
-  const sourceClass = (key: string, color: string) => `evidence-mark ${color}${linkedKey === key ? ' linked-active' : ''}${pulseTarget?.side === 'source' && pulseTarget.key === key ? ' evidence-pulse' : ''}`
-
-  // 核对界面由 fcn-pack 的产物 schema 渲染：字段、来源、缺失规则全部来自配置。
-  const extracted = NEED_BRIEF_SCHEMA.map((f) => ({
-    key: f.key,
-    label: zh ? f.labelZh : f.labelEn,
-    value:
-      f.optional && !clarified
-        ? zh ? '缺失' : 'Missing'
-        : (zh ? f.valueZh : f.valueEn) ?? fieldValue(f.fieldLabel),
-    source: zh ? f.sourceZh : f.sourceEn,
-    status: f.optional && !clarified ? ('missing' as const) : ('verified' as const),
-  }))
+  // 核对界面由 fcn-pack 的产物 schema 渲染：字段、来源、确认规则全部来自配置。
+  //
+  // 两维模型：来源（客户说的 / AI 推断 / 人推导 / 档案）× 确认状态。
+  // 这两维不能压成一维——"客户明确说的 USD"和"我们推出来的腾讯单一标的"
+  // 在责任归属上完全不同，界面上就必须看得出来。
+  // 产品专家已发布方向建议 = 推导字段有了 working assumption
+  const hasProposal = specialistProposalPublished
+  const extracted = buildNeedFields({ needSettled, hasProposal, updates: needFieldUpdates, fields: d.fields, zh })
+  const unresolvedCount = extracted.filter((f) => f.open).length
+  const verifiedCount = extracted.length - unresolvedCount
+  // 推导类字段还没经客户确认 = 内部 working assumption，不能进 RFQ
+  const derivedPending = extracted.filter((f) => f.requiresClientConfirmation && !f.open && !needSettled).length
 
   return (
-    <div className="need-review-workspace">
-      <Panel className="review-summary-banner">
-        <span className="review-summary-icon"><ShieldCheck size={17} /></span>
-        <strong>{zh ? '核对 AI 提取结果' : 'Review AI extraction'}</strong>
-        <span>·</span><span>{zh ? '6 项已核实（含 1 项来自 CRM 档案）' : '6 verified (1 from CRM profile)'}</span><span>·</span><span>{zh ? '1 项缺失' : '1 missing'}</span><span>·</span>
-        <span>{zh ? '确认后交由结构设计' : 'Confirm to hand off to Structuring'}</span>
-      </Panel>
-
-      <div className="need-review-grid">
-        <Panel className="review-source-column">
-          <div className="review-column-label">1. &nbsp;{zh ? '客户原始邮件' : 'Source Email (From Client)'}</div>
-          <div className="review-email-card">
-            <div className="review-email-sender">
-              <span className="client-avatar">MC</span>
-              <span><strong>Mr. Chan</strong><small>{zh ? '收件人' : 'To'}: &nbsp;Alice (RM)</small></span>
-              <time>14:02</time>
-            </div>
-            <div className="review-email-subject">Tencent FCN idea</div>
-            <div className={`review-email-body${pulseTarget?.side === 'source' && pulseTarget.key === 'liquidity' ? ' missing-evidence-pulse' : ''}`} id="source-email-body">
-              <p>Hi Alice,</p>
-              <p>We are interested in a <mark id="source-evidence-horizon" className={sourceClass('horizon', 'green')} role="button" tabIndex={0} aria-controls="field-evidence-horizon" aria-pressed={linkedKey === 'horizon'} onClick={() => activateEvidence('horizon', 'source')} onKeyDown={(event) => evidenceKeyDown(event, 'horizon', 'source')}>6-month</mark> FCN linked to <mark id="source-evidence-underlying" className={sourceClass('underlying', 'blue')} role="button" tabIndex={0} aria-controls="field-evidence-underlying" aria-pressed={linkedKey === 'underlying'} onClick={() => activateEvidence('underlying', 'source')} onKeyDown={(event) => evidenceKeyDown(event, 'underlying', 'source')}>Tencent (0700.HK)</mark>.</p>
-              <p>Notional around <mark id="source-evidence-notional" className={sourceClass('notional', 'purple')} role="button" tabIndex={0} aria-controls="field-evidence-notional" aria-pressed={linkedKey === 'notional'} onClick={() => activateEvidence('notional', 'source')} onKeyDown={(event) => evidenceKeyDown(event, 'notional', 'source')}>USD 1 million</mark>.</p>
-              <p>We are targeting a return of <mark id="source-evidence-target" className={sourceClass('target', 'orange')} role="button" tabIndex={0} aria-controls="field-evidence-target" aria-pressed={linkedKey === 'target'} onClick={() => activateEvidence('target', 'source')} onKeyDown={(event) => evidenceKeyDown(event, 'target', 'source')}>above 10% p.a.</mark>.</p>
-              <p>Our risk tolerance is <mark id="source-evidence-risk" className={sourceClass('risk', 'blue')} role="button" tabIndex={0} aria-controls="field-evidence-risk" aria-pressed={linkedKey === 'risk'} onClick={() => activateEvidence('risk', 'source')} onKeyDown={(event) => evidenceKeyDown(event, 'risk', 'source')}>moderate</mark>.</p>
-              <p>We are <mark id="source-evidence-view" className={sourceClass('view', 'green')} role="button" tabIndex={0} aria-controls="field-evidence-view" aria-pressed={linkedKey === 'view'} onClick={() => activateEvidence('view', 'source')} onKeyDown={(event) => evidenceKeyDown(event, 'view', 'source')}>bullish</mark> on Tencent over the next 6 months.</p>
-              <p><mark className="orange">Please propose a suitable structure and share indicative terms.</mark></p>
-              <p>Best regards,<br />Mr. Chan</p>
-              {linkedKey === 'liquidity' ? <div className="source-missing-evidence"><CircleAlert size={13} /><span>{zh ? '原始邮件中未找到流动性偏好的依据。' : 'No source evidence found for Liquidity Preference.'}</span></div> : null}
-              {linkedKey === 'suitability' ? <div className="source-missing-evidence"><CheckCircle2 size={13} /><span>{zh ? '该字段来自 CRM 客户档案，非邮件提取；下单前将再次校验适当性。' : 'This field comes from the CRM client profile, not the email; suitability is re-checked before execution.'}</span></div> : null}
-            </div>
-            <div className="review-email-foot"><Mail size={13} /><span>{zh ? '邮件 · 14:02 收到' : 'Email · Received 14:02'}</span><span>{zh ? '来源 ID' : 'Source ID'}: email-20250516-1402</span></div>
-          </div>
+    <SourceReviewWorkspace
+      initialKey="notional"
+      sourceColumnLabel={zh ? '客户原始邮件' : 'Source Email (From Client)'}
+      fieldsColumnLabel={zh ? 'AI 提取的客户需求摘要（草稿）' : 'AI Extracted Client Need Brief (Draft)'}
+      briefTitle={zh ? '客户需求摘要' : 'Client Need Brief'}
+      countLabel={`${verifiedCount}/${extracted.length} ${zh ? '已定' : 'set'}`}
+      doc={CLIENT_NEED_EMAIL(zh)}
+      fields={extracted.map((f) => ({
+        key: f.key,
+        label: f.label,
+        value: f.value,
+        source: f.source,
+        originLabel: f.edited ? (zh ? '人工填写' : 'Manual') : originLabel(f.origin, f.fromDiscussion, zh),
+        originTone: f.fromDiscussion ? 'live' : f.origin,
+        open: f.open,
+      }))}
+      onEditField={(key, value) => store.editNeedField(key, value)}
+      banner={
+        <Panel className="review-summary-banner">
+          <span className="review-summary-icon"><ShieldCheck size={17} /></span>
+          <strong>{zh ? '核对 AI 提取结果' : 'Review AI extraction'}</strong>
+          <span>·</span><span>{zh ? `客户明确表达 ${extracted.filter((f) => f.origin === 'stated' && !f.open).length} 项` : `${extracted.filter((f) => f.origin === 'stated' && !f.open).length} client-stated`}</span>
+          <span>·</span><span>{zh ? `推导 ${extracted.filter((f) => f.origin === 'derived').length} 项` : `${extracted.filter((f) => f.origin === 'derived').length} derived`}</span>
+          {derivedPending ? <><span>·</span><span className="banner-warn">{zh ? `${derivedPending} 项推导值未经客户确认` : `${derivedPending} derived values not client-confirmed`}</span></> : null}<span>·</span>
+          <span>{unresolvedCount ? zh ? '推导值必须经客户确认才能进入询价' : 'Derived values must be client-confirmed before RFQ' : zh ? '确认后由产品专家细化结构' : 'Confirm, then the specialist details the structure'}</span>
         </Panel>
-
-        <Panel className="review-extraction-column">
-          <div className="review-column-label">2. &nbsp;{zh ? 'AI 提取的客户需求摘要（草稿）' : 'AI Extracted Client Need Brief (Draft)'}</div>
-          <div className="review-brief-head"><strong>{zh ? '客户需求摘要' : 'Client Need Brief'}</strong><Button variant="ghost" icon={PenLine}>{zh ? '编辑草稿' : 'Edit Draft'}</Button></div>
-          <div className="review-field-grid">
-            {extracted.map((field) => (
-              <div
-                id={`field-evidence-${field.key}`}
-                className={`review-field${linkedKey === field.key ? ' selected linked-active' : ''}${field.status === 'missing' ? ' missing' : ''}${pulseTarget?.side === 'field' && pulseTarget.key === field.key ? ' evidence-pulse' : ''}`}
-                key={field.label}
-                role="button"
-                tabIndex={0}
-                aria-controls={field.status === 'verified' ? `source-evidence-${field.key}` : 'source-email-body'}
-                aria-pressed={linkedKey === field.key}
-                onClick={() => activateEvidence(field.key, 'field')}
-                onKeyDown={(event) => evidenceKeyDown(event, field.key, 'field')}
-              >
-                <div className="review-field-main"><span>{field.label}</span><strong>{field.value}</strong>{field.status === 'verified' ? <CheckCircle2 size={13} /> : <CircleAlert size={14} />}</div>
-                <div className="review-field-source">
-                  <span>{field.status === 'verified' ? zh ? '高置信度' : 'High confidence' : zh ? '信息缺失' : 'Missing information'}</span>
-                  <span>·</span><span>{field.source}</span>{field.source !== '—' ? <ExternalLink size={11} /> : null}
-                </div>
-                {field.status === 'missing' ? (
-                  <div className="missing-field-actions"><MessageSquare size={13} /><span>{zh ? '邮件中未提供流动性信息。' : 'Liquidity details not provided in email.'}</span><Button onClick={(event) => { event.stopPropagation(); store.addClarification() }}>{zh ? '询问客户' : 'Ask client'}</Button><Button onClick={(event) => { event.stopPropagation(); store.addClarification() }}>{zh ? '接受缺失' : 'Accept gap'}</Button></div>
-                ) : null}
-              </div>
-            ))}
-          </div>
-          <div className="review-verification-summary">
-            <span><CheckCircle2 size={14} />{zh ? '6 项已核实' : '6 verified'}</span>
-            <span className="missing"><CircleAlert size={14} />{zh ? '1 项缺失' : '1 missing'}</span>
-            <span className="muted"><CheckCircle2 size={14} />{zh ? POLICIES.suitability.passZh : POLICIES.suitability.passEn}</span>
-          </div>
-        </Panel>
-      </div>
-
-      <Panel className="need-review-actions">
-        <Button icon={PenLine} onClick={() => store.addClarification()}>{zh ? '编辑草稿' : 'Edit Draft'}</Button>
-        <Button icon={MessageSquare} onClick={() => store.addClarification()}>{zh ? '请求澄清' : 'Ask for Clarification'}</Button>
-        <Button variant="primary" icon={ShieldCheck} className="need-primary" disabled={role !== 'rm'} onClick={confirmNeed}>
-          <span><strong>{zh ? '确认客户需求' : 'Confirm Client Need'}</strong><small>{zh ? '批准该客户需求并继续流程' : 'Approve this client need to proceed'}</small></span>
+      }
+      summary={
+        <div className="review-verification-summary">
+          <span><CheckCircle2 size={14} />{zh ? `${verifiedCount} 项已核实` : `${verifiedCount} verified`}</span>
+          {unresolvedCount ? <span className="missing"><CircleAlert size={14} />{zh ? `${unresolvedCount} 项待推导 / 待确认` : `${unresolvedCount} unresolved`}</span> : null}
+          <span className="muted"><CheckCircle2 size={14} />{zh ? POLICIES.suitability.passZh : POLICIES.suitability.passEn}</span>
+        </div>
+      }
+      primary={
+        <Button variant="primary" icon={ShieldCheck} className="need-primary" disabled={role !== 'rm' || !specialistJoined} title={specialistJoined ? undefined : zh ? '需求需与产品专家共同界定后才能确认' : 'The need must be defined jointly with the product specialist'} onClick={confirmNeed}>
+          <span><strong>{zh ? '确认客户需求' : 'Confirm Client Need'}</strong><small>{zh ? specialistJoined ? 'RM + 产品专家共同确认' : '需产品专家共同界定' : specialistJoined ? 'RM + specialist, jointly' : 'Needs the product specialist'}</small></span>
         </Button>
-      </Panel>
-    </div>
+      }
+      // 次级操作栏。「@ 产品专家」的提示去掉了：拉人进来是一句话的事，
+      // 在下面输入框打「@David 帮我看下这个需求」就行——提示条只是把同一件事
+      // 又说了一遍，还占掉主操作旁边最贵的一块地方。
+      secondary={specialistJoined ? (
+        !specialistProposalPublished ? (
+          <Button icon={Sparkles} onClick={() => store.togglePrivate(true)}>{zh ? role === 'ps' ? '查看 agent 初稿（私区）' : '等待 David 确认方向初稿' : role === 'ps' ? 'Review agent draft' : 'Waiting for David'}</Button>
+        ) : (
+          <>
+            {/* 共创是双向的：RM 出客户关系判断，可以推翻产品专家的取舍 */}
+            {!rmPushedBack && !needSettled ? (
+              <Button icon={Undo2} onClick={() => store.pushBackOnProposal()} disabled={role !== 'rm'} title={zh ? '基于客户关系判断，对方向建议提出不同看法' : 'Push back based on client-relationship judgement'}>{zh ? '我有不同看法' : 'I see it differently'}</Button>
+            ) : null}
+            <Button icon={MessageSquare} onClick={() => (clientBriefDrafted ? store.togglePrivate(true) : store.draftClientBrief())} disabled={role !== 'rm' || needSettled || specialistDraftPending}>{zh ? needSettled ? '已与客户确认方向' : clientBriefDrafted ? '查看对客说明草稿' : specialistDraftPending ? '等待 David 确认 v3' : '起草对客方向说明' : needSettled ? 'Direction confirmed' : clientBriefDrafted ? 'Open client note draft' : specialistDraftPending ? 'Waiting for David’s v3' : 'Draft client note'}</Button>
+          </>
+        )
+      ) : undefined}
+    />
   )
 }
 
 // ── 8.1 Client Need Brief ────────────────────────────────────────────────
 function NeedBrief({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
-  const { truth, clarified } = useEngine()
+  const { truth, needSettled, participants, specialistProposalPublished } = useEngine()
   if (artifact.data.type !== 'needBrief') return null
   const d = artifact.data
-  const editable = artifact.status !== 'APPROVED' && truth.status === 'CLIENT_NEED_DRAFT'
+  const specialistJoined = participants.some((p) => p.person.role === 'ps' && !p.person.guest)
+  const editable =
+    artifact.status !== 'APPROVED' &&
+    (truth.status === 'CLIENT_NEED_DRAFT' || truth.status === 'CLIENT_NEED_JOINT_REVIEW')
+  const underlying = d.fields.find((f) => f.label === 'Underlying')?.value ?? '—'
   return (
     <ArtifactFrame
       artifact={artifact}
       sourceRef={d.sourceRef}
-      summary="0700.HK · USD 1M · ~6M · >10%"
+      summary={`${needSettled ? '0700.HK' : '标的待定'} · USD 1M · ~6M · >10%`}
       actions={
         editable ? (
           <>
-            <ActionBtn
-              label="补充说明"
-              kind="ghost"
-              allowed={['rm']}
-              role={role}
-              onClick={() => store.addClarification()}
-              disabledReason={clarified ? '已补充' : undefined}
-            />
+            {/* 同上：拉产品专家进来在输入框打一句 @David 即可，不再给按钮 */}
+            {!specialistJoined ? null : (
+              <ActionBtn
+                label="起草对客说明"
+                kind="ghost"
+                allowed={['rm']}
+                role={role}
+                onClick={() => store.draftClientBrief()}
+                disabledReason={needSettled ? '已确认' : !specialistProposalPublished ? '待 David 确认方向' : undefined}
+              />
+            )}
             <ActionBtn
               label="确认客户需求"
               kind="primary"
               allowed={FCN_WORKFLOW.confirmNeed.allowedRoles}
               role={role}
+              disabledReason={specialistJoined ? undefined : '需产品专家共同界定'}
               onClick={() =>
                 confirmThen({
                   key: 'confirmNeed',
-                  title: '确认客户需求 Confirm Client Need',
+                  title: '确认客户需求，移交 David？',
                   summary: [
-                    'Underlying: Tencent / 0700.HK',
+                    `Underlying: ${underlying}`,
                     'Notional: USD 1,000,000',
                     'Horizon: ~6M · Target Yield: >10%',
                     'Risk Tolerance: Moderate',
                   ],
-                  consequence: clarified
-                    ? '确认后客户需求将成为 Approved 状态，Case 交给 David（产品专家）设计结构。'
-                    : '仍有缺失项（流动性偏好）。确认即表示接受缺失项。Case 将交给 David（产品专家）设计结构。',
+                  consequence: needSettled
+                    ? '把 Alice 与 David 共同界定的需求定为已确认，交给 David 细化成结构方案。'
+                    : '还有未定项，确认即表示这几项留到结构阶段再定。',
+                  ack: needSettled
+                    ? '标的与流动性是共创结论、非客户邮件原文，已与客户核对'
+                    : '我知道还有未定项，由我和 David 负责补齐',
                   confirmLabel: '确认客户需求',
                 })
               }
@@ -369,7 +398,7 @@ function NeedBrief({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
         </EvidencePanel>
         <Panel className="extracted-fields-panel">
           <div className="extracted-fields-head">
-            <span><Sparkles size={14} />AI extracted client need</span>
+            <span><Sparkles size={14} />AI 提取的客户需求</span>
             <Tag tone="success">6 fields verified</Tag>
           </div>
           <Fields rows={d.fields} />
@@ -390,23 +419,24 @@ function NeedBrief({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
 
 // ── 8.2 Structure Proposal ───────────────────────────────────────────────
 function StructureProposal({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
-  const { truth, kiModified } = useEngine()
+  const { truth, tradeTermsRevised } = useEngine()
   if (artifact.data.type !== 'structureProposal') return null
   const d = artifact.data
   const reviewable =
     artifact.status === 'PENDING APPROVAL' &&
     ['STRUCTURE_REVIEW', 'STRUCTURE_MODIFICATION_REQUIRED'].includes(truth.status)
-  const selected = d.options.find((o) => o.optionId === d.selectedId)
+  const picked = d.options.filter((o) => d.selectedIds.includes(o.optionId))
+  const selected = picked[0]
   return (
     <ArtifactFrame
       artifact={artifact}
-      sourceRef="Approved Client Need · 14:08"
+      sourceRef="Approved Client Need · 14:16"
       summary={selected ? `${selected.label} · ${selected.strike}/${selected.knockIn} · ${selected.couponTarget}` : undefined}
       actions={
         reviewable ? (
           <>
-            {!kiModified && (
-              <ActionBtn label="调整 KI 70% → 65%" kind="secondary" allowed={['ps']} role={role} onClick={() => store.modifyKI()} />
+            {tradeTermsRevised ? null : (
+              <ActionBtn label="回到初稿修改" kind="ghost" allowed={['ps']} role={role} onClick={() => store.togglePrivate(true)} />
             )}
             <ActionBtn
               label="审批结构"
@@ -416,7 +446,7 @@ function StructureProposal({ artifact, role }: { artifact: Artifact; role: RoleK
               onClick={() =>
                 confirmThen({
                   key: 'approveStructure',
-                  title: '审批结构 Approve Structure',
+                  title: '批准这个结构？',
                   summary: [
                     `${selected?.label ?? ''} · ${selected?.productType} ${selected?.tenor}`,
                     `Strike: ${selected?.strike} · KI: ${selected?.knockIn}`,
@@ -435,7 +465,7 @@ function StructureProposal({ artifact, role }: { artifact: Artifact; role: RoleK
       <div className="artifact-insight">
         <Sparkles size={15} />
         <span><strong>AI prepared 3 comparable structures</strong>{d.comparisonNote}</span>
-        <Tag tone="ai">Decision support</Tag>
+        <Tag tone="ai">决策支持</Tag>
       </div>
       {truth.status === 'STRUCTURE_MODIFICATION_REQUIRED' && (
         <div className="inline-alert warning">
@@ -449,9 +479,9 @@ function StructureProposal({ artifact, role }: { artifact: Artifact; role: RoleK
         {d.options.map((o) => (
           <button
             key={o.optionId}
-            className={`opt${d.selectedId === o.optionId ? ' selected' : ''}`}
+            className={`opt${d.selectedIds.includes(o.optionId) ? ' selected' : ''}`}
             disabled={!reviewable || role !== 'ps'}
-            onClick={() => store.selectOption(o.optionId)}
+            onClick={() => store.toggleOption(o.optionId)}
           >
             <span className="opt-head">
               <span className="radio" />
@@ -503,7 +533,7 @@ function RFQPackage({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
   return (
     <ArtifactFrame
       artifact={artifact}
-      sourceRef="Approved Structure · 14:15"
+      sourceRef="Approved Structure · 14:19"
       summary={`FCN · ${fv('Strike')}/${fv('Knock-In')} · ${d.issuers.length} 家发行商`}
       actions={
         reviewable ? (
@@ -516,7 +546,7 @@ function RFQPackage({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
               onClick={() =>
                 confirmThen({
                   key: 'returnRFQ',
-                  title: '退回修改 Return for Modification',
+                  title: '退回给产品专家修改？',
                   summary: ['RFQ Package 将标记为 Superseded', 'Case 交回 David（产品专家）修改结构'],
                   consequence: '这是正常的业务回路：Dealer 认为结构参数需要调整时，退回产品专家修改后重新审批。',
                   confirmLabel: '退回产品专家',
@@ -532,7 +562,7 @@ function RFQPackage({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
               onClick={() =>
                 confirmThen({
                   key: 'acceptPricing',
-                  title: '接受询价请求 Accept Pricing Request',
+                  title: '向发行商发出询价？',
                   summary: [
                     `FCN · 0700.HK · USD 1M · ${fv('Tenor')}`,
                     `Strike ${fv('Strike')} · KI ${fv('Knock-In')}`,
@@ -577,7 +607,7 @@ function RFQPackage({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
 
 // ── 8.4 Quote Matrix ─────────────────────────────────────────────────────
 function QuoteMatrix({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
-  const { truth, now } = useEngine()
+  const { truth } = useEngine()
   if (artifact.data.type !== 'quoteMatrix') return null
   const d = artifact.data
   const actionable = artifact.status === 'ACTIVE' && truth.status === 'PRICING_IN_PROGRESS'
@@ -602,7 +632,7 @@ function QuoteMatrix({ artifact, role }: { artifact: Artifact; role: RoleKey }) 
               onClick={() =>
                 confirmThen({
                   key: 'modifyFromPricing',
-                  title: '修改结构 Modify Structure',
+                  title: '退回修改结构？',
                   summary: ['当前报价矩阵将标记为 Stale', 'Case 交回 David（产品专家）修改结构'],
                   consequence: '适用于市场反馈显示原结构经济性不足的情况。修改后需重新生成 RFQ 并询价。',
                   confirmLabel: '退回修改结构',
@@ -618,7 +648,7 @@ function QuoteMatrix({ artifact, role }: { artifact: Artifact; role: RoleKey }) 
               onClick={() =>
                 confirmThen({
                   key: 'requestRequote',
-                  title: '请求重报 Request Requote',
+                  title: '请发行商重新报价？',
                   summary: ['向全部发行商请求新一轮报价', '现有报价矩阵将标记为 Stale'],
                   consequence: '适用于报价过期、报价不足或市场移动的情况。',
                   confirmLabel: '请求重报',
@@ -633,7 +663,7 @@ function QuoteMatrix({ artifact, role }: { artifact: Artifact; role: RoleKey }) 
               onClick={() =>
                 confirmThen({
                   key: 'prepareClientQuote',
-                  title: '准备客户报价 Prepare Client Quote',
+                  title: '生成对客报价，交给 Alice？',
                   summary: [
                     `选定：${best?.issuer ?? 'Morgan Stanley'} · Coupon ${best?.coupon?.toFixed(2)}%`,
                     `Strike ${best?.strike} · KI ${best?.ki} · ${best?.tenor}`,
@@ -648,21 +678,21 @@ function QuoteMatrix({ artifact, role }: { artifact: Artifact; role: RoleKey }) 
       }
     >
       <div className="market-overview">
-        <div><span>Market response</span><strong>{d.quotes.filter((quote) => quote.coupon !== null).length} / {d.quotes.length} issuers</strong></div>
-        <div><span>Best comparable</span><strong>{best?.issuer} · {best?.coupon?.toFixed(2)}%</strong></div>
-        <div><span>Freshness</span><strong>{d.freshnessNote}</strong></div>
-        <div className="market-recommendation"><Sparkles size={15} /><span><strong>AI recommendation</strong>{d.bestNote}</span></div>
+        <div><span>市场回应</span><strong>{d.quotes.filter((quote) => quote.coupon !== null).length} / {d.quotes.length} issuers</strong></div>
+        <div><span>最优可比</span><strong>{best?.issuer} · {best?.coupon?.toFixed(2)}%</strong></div>
+        <div><span>有效期</span><strong>{d.freshnessNote}</strong></div>
+        <div className="market-recommendation"><Sparkles size={15} /><span><strong>AI 推荐</strong>{d.bestNote}</span></div>
       </div>
       <div className="qm-wrap">
         <table>
           <thead>
             <tr>
-              <th>Issuer</th>
-              <th>Coupon</th>
+              <th>发行商</th>
+              <th>票息</th>
               <th>Strike</th>
               <th>KI</th>
-              <th>Validity</th>
-              <th>Status</th>
+              <th>有效期</th>
+              <th>判定</th>
             </tr>
           </thead>
           <tbody>
@@ -672,10 +702,8 @@ function QuoteMatrix({ artifact, role }: { artifact: Artifact; role: RoleKey }) 
                 <td className="num">{q.coupon?.toFixed(2)}%</td>
                 <td className="num">{q.strike}</td>
                 <td className="num">{q.ki}</td>
-                <td>
-                  <Countdown until={q.expiresAt} now={now} />
-                </td>
-                <td>{q.best ? <span className="badge success">Best comparable</span> : <span className="badge neutral">Comparable</span>}</td>
+                <td><Validity /></td>
+                <td>{q.best ? <span className="badge success">最优可比</span> : <span className="badge neutral">可比</span>}</td>
               </tr>
             ))}
             <tr className="qm-divider">
@@ -690,12 +718,12 @@ function QuoteMatrix({ artifact, role }: { artifact: Artifact; role: RoleKey }) 
                   {q.ki}
                   {q.differences.length > 0 && <span className="diff"> ≠ {approvedKI}</span>}
                 </td>
-                <td>{q.expiresAt ? <Countdown until={q.expiresAt} now={now} /> : '—'}</td>
+                <td>{q.coupon === null ? '—' : <Validity />}</td>
                 <td>
                   {q.coupon === null ? (
                     <span className="badge neutral">未回复</span>
                   ) : (
-                    <span className="badge warning">Different terms</span>
+                    <span className="badge warning">条款不可比</span>
                   )}
                 </td>
               </tr>
@@ -717,7 +745,7 @@ function QuoteMatrix({ artifact, role }: { artifact: Artifact; role: RoleKey }) 
 
 // ── 8.5 Client Quote Card ────────────────────────────────────────────────
 function ClientQuote({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
-  const { truth, now } = useEngine()
+  const { truth } = useEngine()
   if (artifact.data.type !== 'clientQuote') return null
   const d = artifact.data
   const sendable = artifact.status === 'PENDING REVIEW' && truth.status === 'CLIENT_QUOTE_READY'
@@ -737,7 +765,7 @@ function ClientQuote({ artifact, role }: { artifact: Artifact; role: RoleKey }) 
             onClick={() =>
               confirmThen({
                 key: 'sendClientQuote',
-                title: '与客户沟通报价 Communicate Quote',
+                title: '把报价发给客户？',
                 summary: [`${d.issuer} · Coupon ${tv('Coupon')}`, `FCN 0700.HK · 6M · Strike ${tv('Strike')} · KI ${tv('Knock-In')}`],
                 consequence: '报价内容由 RM 复核后发出（AI 不会自动对外）。发送后 Case 进入等待客户状态。',
                 confirmLabel: '确认已复核并发送',
@@ -748,28 +776,22 @@ function ClientQuote({ artifact, role }: { artifact: Artifact; role: RoleKey }) 
       }
     >
       <div className="quote-validity-band">
-        <div><Clock3 size={15} /><span>Client quote validity</span></div>
-        <Countdown until={d.validityUntil} now={now} />
-        <span>Terms remain subject to issuer confirmation until execution.</span>
+        <div><Clock3 size={15} /><span>报价有效期</span></div>
+        <Validity />
+        <span>跨日未成交需重新询价。客户确认后对客条款即锁死。</span>
       </div>
       <Fields rows={d.terms} />
-      <div className="client-quote-layout">
-        <Panel className="client-facing-preview">
-          <div className="cq-label">Client-facing quote summary</div>
-          <h3>Tencent 6M Fixed Coupon Note</h3>
-          <div className="client-coupon">{tv('Coupon').split(' ')[0]} <span>p.a.</span></div>
-          <p>{d.summary}</p>
-          <div className="cq-risk">
-            <b>Risk explanation</b>
-            <span>{d.riskSummary}</span>
-          </div>
-        </Panel>
-        <Panel className="client-message-draft">
-          <div className="cq-label">Draft client message · RM review</div>
-          <p>Hi Mr. Chan, we have obtained an indicative quote for the Tencent idea discussed. The proposed coupon is {tv('Coupon').split(' ')[0]} p.a. for a 6-month FCN, with Strike {tv('Strike')} and Knock-In {tv('Knock-In')}.</p>
-          <p>Please note that capital is at risk if Tencent falls below the knock-in level, and final execution remains subject to a live quote.</p>
-        </Panel>
-      </div>
+      {/* 对客文案只保留一份（需求阶段那份已脱敏的方向说明）。
+          原来这里还有第二份英文草稿，内容与之不一致，且写着"执行前需重新核价"——
+          那条流程已不存在。 */}
+      <Panel className="client-facing-preview">
+        <div className="cq-label">对客表述 · 随报价发出</div>
+        <p>{d.summary}</p>
+        <div className="cq-risk">
+          <b>风险披露</b>
+          <span>{d.riskSummary}</span>
+        </div>
+      </Panel>
       <div className="fgrid">
         <span className="fl">内部备注</span>
         <span className="fv" style={{ fontWeight: 400, color: 'var(--text-2)' }}>
@@ -782,7 +804,7 @@ function ClientQuote({ artifact, role }: { artifact: Artifact; role: RoleKey }) 
 
 // ── 8.6 Client Instruction Card ──────────────────────────────────────────
 function InstructionCard({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
-  const { truth, artifacts, now } = useEngine()
+  const { truth } = useEngine()
   if (artifact.data.type !== 'instruction') return null
   const d = artifact.data
   const confirmable = artifact.status === 'PENDING CONFIRMATION' && truth.status === 'CLIENT_INSTRUCTION_PENDING_CONFIRMATION'
@@ -819,7 +841,7 @@ function InstructionCard({ artifact, role }: { artifact: Artifact; role: RoleKey
               onClick={() =>
                 confirmThen({
                   key: 'confirmInstruction',
-                  title: '确认正式客户指令 Confirm Client Instruction',
+                  title: '确认这是一条正式客户指令？',
                   summary: [
                     `Issuer: ${iv('Issuer')}`,
                     `${iv('Product')} · ${iv('Notional')}`,
@@ -836,27 +858,24 @@ function InstructionCard({ artifact, role }: { artifact: Artifact; role: RoleKey
     >
       <div className="instruction-detection-banner">
         <span className="detection-icon"><Sparkles size={16} /></span>
-        <span><strong>Possible formal client instruction detected</strong>AI confidence {d.confidence}. RM confirmation is required before an execution ticket can be created.</span>
-        <Tag tone="warning">Pending confirmation</Tag>
+        <span><strong>识别到一条可能的正式客户指令</strong>AI 置信度 {d.confidence}。需 RM 确认后才会创建下单指令。</span>
+        <Tag tone="warning">待确认</Tag>
       </div>
       <div className="instruction-layout">
-        <EvidencePanel title="Client reply" meta="Mr. Chan · 14:36 · Re: Tencent FCN quote">
-          Thanks Alice. <mark>Yes, please proceed with Morgan Stanley</mark> for <mark>USD 1,000,000</mark> on the terms shared.
-          Please <mark>execute today</mark> and confirm once done.
+        <EvidencePanel title="客户回复" meta="Mr. Chan · 14:36 · 电话转述（录音已归档）">
+          我选<mark>不设赎回那个</mark>吧，我看好腾讯，要是涨回去就被提前赎回了反而可惜。
+          <mark>USD 1,000,000</mark>，请<mark>今天内</mark>帮我执行。
         </EvidencePanel>
         <Panel className="instruction-summary-panel">
-          <div className="extracted-fields-head"><span><ShieldCheck size={14} />Instruction summary</span><Tag tone="success">Evidence linked</Tag></div>
+          <div className="extracted-fields-head"><span><ShieldCheck size={14} />指令要素</span><Tag tone="success">已关联证据</Tag></div>
           <Fields rows={[{ label: 'Detected Intent', value: d.intent }, ...d.terms]} />
         </Panel>
       </div>
       {(() => {
-        const quote = Object.values(artifacts).find((item) => item.data.type === 'clientQuote')
-        const validUntil = quote?.data.type === 'clientQuote' ? quote.data.validityUntil : null
         return (
           <div className="freshness-check">
-            <Clock3 size={15} />
-            <span><strong>Quote freshness check</strong>Issuer quote must still be valid at execution. Current indication:</span>
-            <Countdown until={validUntil} now={now} />
+            <ShieldCheck size={15} />
+            <span><strong>对客条款锁死</strong>确认后票息不再变动；上手成交价在下单回报时才确定，差额为本单价差。</span>
           </div>
         )
       })()}
@@ -866,7 +885,7 @@ function InstructionCard({ artifact, role }: { artifact: Artifact; role: RoleKey
 
 // ── 8.7 Execution Ticket ─────────────────────────────────────────────────
 function ExecutionTicket({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
-  const { truth, now } = useEngine()
+  const { truth } = useEngine()
   if (artifact.data.type !== 'executionTicket') return null
   const d = artifact.data
   const executable = artifact.status === 'DRAFT' && truth.status === 'EXECUTION_READY'
@@ -886,7 +905,7 @@ function ExecutionTicket({ artifact, role }: { artifact: Artifact; role: RoleKey
             onClick={() =>
               confirmThen({
                 key: 'executeTrade',
-                title: '确认并执行 Confirm & Execute',
+                title: '确认代客下单？',
                 summary: [
                   `${ev('Issuer')} · FCN 0700.HK`,
                   `${ev('Notional')} · ${ev('Tenor')}`,
@@ -902,26 +921,23 @@ function ExecutionTicket({ artifact, role }: { artifact: Artifact; role: RoleKey
       }
     >
       <div className="execution-validity">
-        <span><CheckCircle2 size={16} /><strong>Quote still valid</strong>Live Morgan Stanley quote received at {d.quoteTime}</span>
-        <Countdown until={d.validityUntil} now={now} />
+        <span><CheckCircle2 size={16} /><strong>对客条款已锁死</strong>指令装配于 {d.quoteTime}；场外指令形式，不走询价接口</span>
       </div>
       <Fields rows={d.fields} />
       <div className="fgrid">
-        <span className="fl">Quote Timestamp</span>
+        <span className="fl">指令装配时间</span>
         <span className="fv num">{d.quoteTime}</span>
-        <span className="fl">价格有效期</span>
-        <span className="fv num">
-          <Countdown until={d.validityUntil} now={now} />
-        </span>
+        <span className="fl">下单渠道</span>
+        <span className="fv num">场外指令 · 非接口</span>
       </div>
       <p className="ai-note">
         <span className="ai-verb">AI 已校验</span>
         {d.note}
       </p>
       <div className="pretrade-checks">
-        <div><CheckCircle2 size={15} /><span><strong>Client instruction</strong>Confirmed by Alice · RM</span></div>
-        <div><CheckCircle2 size={15} /><span><strong>Terms alignment</strong>Ticket matches approved structure</span></div>
-        <div><CheckCircle2 size={15} /><span><strong>Operational readiness</strong>Settlement and booking fields complete</span></div>
+        <div><CheckCircle2 size={15} /><span><strong>客户指令</strong>Alice · RM 已确认</span></div>
+        <div><CheckCircle2 size={15} /><span><strong>条款一致性</strong>与已批准结构一致</span></div>
+        <div><CheckCircle2 size={15} /><span><strong>运营就绪</strong>结算与簿记字段齐备</span></div>
       </div>
     </ArtifactFrame>
   )
@@ -929,9 +945,11 @@ function ExecutionTicket({ artifact, role }: { artifact: Artifact; role: RoleKey
 
 // ── 8.8 Termsheet Validation ─────────────────────────────────────────────
 function TermsheetValidation({ artifact, role }: { artifact: Artifact; role: RoleKey }) {
+  // 发行商文件预览的数值从核对数据取，避免写死后与正文脱节
   const { truth } = useEngine()
   if (artifact.data.type !== 'termsheetValidation') return null
   const d = artifact.data
+  const ts = (field: string) => d.rows.find((r) => r.field === field)?.termsheet ?? '—'
   const reviewable = artifact.status === 'PENDING APPROVAL' && truth.status === 'TERMSHEET_REVIEW'
   const inException = artifact.status === 'EXCEPTION' && truth.status === 'EXCEPTION'
   const mismatches = d.rows.filter((r) => r.status !== 'match').length
@@ -944,19 +962,19 @@ function TermsheetValidation({ artifact, role }: { artifact: Artifact; role: Rol
         reviewable ? (
           mismatches > 0 ? (
             <>
-              <ActionBtn label="Review AI assessment" kind="ghost" allowed={['rm', 'ops', 'dealer']} role={role} onClick={() => store.openDrawer({ type: 'source', payload: CLIENT_SOURCE_BODY['art-inst'] })} />
+              <ActionBtn label="复核 AI 评估" kind="ghost" allowed={['rm', 'ops', 'dealer']} role={role} onClick={() => store.openDrawer({ type: 'source', payload: CLIENT_SOURCE_BODY['art-inst'] })} />
               <ActionBtn
-                label="Request Corrected Term Sheet"
+                label="请求更正版条款书"
                 kind="primary"
                 allowed={FCN_WORKFLOW.raiseException.allowedRoles}
                 role={role}
                 onClick={() =>
                   confirmThen({
                     key: 'raiseException',
-                    title: 'Request Corrected Term Sheet',
-                    summary: ['Classification: Documentation Error', 'Mismatch: Settlement T+2（执行单）≠ T+3（条款书）', 'Owner: Morgan Stanley · Documentation'],
-                    consequence: 'AI 判断执行记录与客户指令一致，差异来自发行商条款书。请求更正版不会触发客户重新确认；Case 将进入 Documentation Exception。',
-                    confirmLabel: 'Request correction',
+                    title: '请求更正版条款书',
+                    summary: ['分类：文档差异', 'Mismatch: Settlement T+2（执行单）≠ T+3（条款书）', 'Owner: Morgan Stanley · Documentation'],
+                    consequence: 'AI 判断执行记录与客户指令一致，差异来自发行商条款书。请求更正版不会触发客户重新确认；Case 将进入 文档异常。',
+                    confirmLabel: '请求更正',
                     danger: true,
                   })
                 }
@@ -971,7 +989,7 @@ function TermsheetValidation({ artifact, role }: { artifact: Artifact; role: Rol
               onClick={() =>
                 confirmThen({
                   key: 'approveTermsheet',
-                  title: '审批条款书 Approve Termsheet',
+                  title: '批准最终条款书？',
                   summary: ['全部字段与执行单一致（Notional / Strike / KI / Coupon / Settlement）', '复核人 Mia ≠ 执行人 Ken（职责分离）', '归档材料：客户指令（邮件+录音）· 执行单 · Final Termsheet'],
                   consequence: '审批后 Case 完成（COMPLETED），全流程 audit 记录可在 History 查看。',
                   confirmLabel: '审批条款书',
@@ -990,7 +1008,7 @@ function TermsheetValidation({ artifact, role }: { artifact: Artifact; role: Rol
                 key: 'resolveException',
                 title: '标记异常已解决',
                 summary: ['MS 确认条款书笔误：正确结算日为 T+2', '更正后的条款书已重发'],
-                consequence: 'Case 将回到条款书待审批状态，由簿记 / 核对重新审批。',
+                consequence: 'Case 将回到条款书待审批状态，由 Trade Support 重新审批。',
                 confirmLabel: '标记已解决',
               })
             }
@@ -1001,28 +1019,29 @@ function TermsheetValidation({ artifact, role }: { artifact: Artifact; role: Rol
       <div className="exception-assessment">
         <div className="assessment-head">
           <span className="assessment-icon"><Route size={17} /></span>
-          <span><strong>AI Exception Assessment</strong>Compared Client Instruction, Execution Record and Issuer Term Sheet</span>
-          <Tag tone="warning">Review required</Tag>
+          <span><strong>AI 异常评估</strong>已比对：交易登记记录 · 簿记 · 发行商条款书</span>
+          <Tag tone="warning">需人工判断</Tag>
         </div>
         <div className="assessment-grid">
-          <div><span>Classification</span><strong>Documentation Error</strong></div>
-          <div><span>Severity</span><strong>Medium</strong></div>
-          <div><span>Root Cause</span><strong>Issuer term sheet differs from executed settlement</strong></div>
-          <div><span>Owner</span><strong>MS Documentation / Trade Support</strong></div>
-          <div><span>Client Impact</span><strong>None if corrected before release</strong></div>
-          <div><span>Client Reconfirmation Required</span><strong>No</strong></div>
+          <div><span>分类</span><strong>文档差异</strong></div>
+          <div><span>严重度</span><strong>中</strong></div>
+          <div><span>成因</span><strong>发行商条款书与内部记录不一致</strong></div>
+          <div><span>处理方</span><strong>MS Documentation / Trade Support</strong></div>
+          <div><span>客户影响</span><strong>更正后发出则无影响</strong></div>
+          <div><span>需客户重新确认</span><strong>No</strong></div>
         </div>
-        <div className="recommended-route"><strong>Recommended Action</strong><span>Request a corrected term sheet and re-run validation on receipt.</span></div>
+        <div className="recommended-route"><strong>建议动作</strong><span>请求更正版条款书，收到后重新核对。</span></div>
       </div>
       <div className="validation-layout">
         <div className="tv-wrap">
           <table>
             <thead>
               <tr>
-                <th>Field</th>
-                <th>Execution Ticket</th>
-                <th>Term Sheet</th>
-                <th>Status</th>
+                <th>字段</th>
+                <th>交易登记记录</th>
+                <th>簿记</th>
+                <th>发行商条款书</th>
+                <th>判定</th>
               </tr>
             </thead>
             <tbody>
@@ -1030,6 +1049,7 @@ function TermsheetValidation({ artifact, role }: { artifact: Artifact; role: Rol
                 <tr key={r.field} className={r.status !== 'match' ? 'warning' : ''}>
                   <td className="fieldname">{r.field}</td>
                   <td>{r.ticket}</td>
+                  <td>{r.booking}</td>
                   <td>{r.termsheet}</td>
                   <td><span className={`st ${r.status}`}>{r.status === 'match' ? '✓ Match' : '⚠ Mismatch'}</span></td>
                 </tr>
@@ -1038,12 +1058,13 @@ function TermsheetValidation({ artifact, role }: { artifact: Artifact; role: Rol
           </table>
         </div>
         <Panel className="term-sheet-preview">
-          <div className="document-preview-head"><FileText size={14} />MS Final Term Sheet <Tag>PDF · 14:52</Tag></div>
+          <div className="document-preview-head"><FileText size={14} />MS Final Term Sheet <Tag>PDF · 14:56</Tag></div>
           <div className="document-paper">
             <strong>FINAL TERMS AND CONDITIONS</strong>
+            {/* 发行商原始文件保持英文（这是真实的）；数值从核对数据取，不写死 */}
             <span>Issuer: Morgan Stanley</span><span>Underlying: Tencent Holdings 0700.HK</span><span>Notional: USD 1,000,000</span>
-            <span>Strike: 80%</span><span>Knock-In: 70%</span><span>Coupon: 10.15% p.a.</span>
-            <span className="document-mismatch">Settlement: T+3</span>
+            <span>Strike: {ts('Strike')}</span><span>Knock-In: {ts('Knock-In')}</span><span>Coupon: {ts('Coupon')} p.a.</span>
+            <span className="document-mismatch">Settlement: {ts('Settlement')}</span>
           </div>
         </Panel>
       </div>
