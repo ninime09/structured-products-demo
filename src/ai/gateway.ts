@@ -9,9 +9,18 @@ export type AiMode = 'script' | 'live'
 
 const KEY = 'sp-ai-mode'
 
+/**
+ * 默认模式分环境：
+ *  · 线上部署的 demo 默认真模型——拿到链接的人不会先去菜单里翻开关，
+ *    默认脚本等于把最想展示的东西藏起来了。
+ *  · 本地 dev 仍默认脚本：改代码和排练时不该每次都真花钱、真等十几秒。
+ * 人一旦手动切过，就以他的选择为准——kill switch 还在。
+ */
 export function getAiMode(): AiMode {
   if (typeof window === 'undefined') return 'script'
-  return window.localStorage.getItem(KEY) === 'live' ? 'live' : 'script'
+  const saved = window.localStorage.getItem(KEY)
+  if (saved === 'live' || saved === 'script') return saved
+  return import.meta.env.PROD ? 'live' : 'script'
 }
 
 export function setAiMode(mode: AiMode) {

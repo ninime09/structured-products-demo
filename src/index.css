@@ -3183,6 +3183,7 @@ button:disabled { cursor: not-allowed; }
 .ai-mode-head strong { font-size: 12.5px; }
 .ai-mode-head small { font-size: 10.5px; color: var(--text-2, #8b95a3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ai-mode-trace { margin: 2px 8px 4px; font-size: 10.5px; color: #3f8f5c; }
+.ai-mode-trace small { margin-left: 4px; opacity: .7; }
 .ai-mode-hint { margin: 2px 8px 6px; font-size: 10.5px; line-height: 1.6; color: #97722a; }
 .ai-mode-hint code { background: #fdf7ef; border-radius: 4px; padding: 1px 4px; font-size: 10px; }
 .language-switch button:disabled { opacity: .45; cursor: not-allowed; }

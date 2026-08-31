@@ -142,9 +142,13 @@ function AiModePanel() {
           >真模型</button>
         </div>
       </div>
-      {mode === 'live' && trace ? (
+      {/* count 为 0 时不显示：线上网关的轨迹存在 serverless 实例内存里，
+          /api/llm/trace 很可能落在另一个实例上，于是调用明明成功了却显示
+          「调用 0 次」——那比不显示更误导，会被读成"没调通"。 */}
+      {mode === 'live' && trace && trace.count > 0 ? (
         <div className="ai-mode-trace">
           调用 {trace.count} 次 · 成功率 {trace.okRate === null ? '—' : `${Math.round(trace.okRate * 100)}%`} · 平均 {trace.avgMs ?? '—'}ms
+          <small>（本实例累计）</small>
         </div>
       ) : null}
       {!ready ? <div className="ai-mode-hint">在 <code>.env</code> 里设置 <code>{active?.keyEnv ?? 'DEEPSEEK_API_KEY'}</code> 后重启 dev server</div> : null}
