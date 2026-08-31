@@ -14,10 +14,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { handleLlm } from '../../server/gateway.js'
 
-export const config = {
-  // 模型带工具调用可能跑几十秒，默认 10s 会被砍断
-  maxDuration: 60,
-}
+// 超时放在 vercel.json 的 functions 里配（模型带工具调用可能跑几十秒，
+// 默认 10s 会被砍断）。这里不再重复声明，免得两处不一致。
 
 export default async function handler(
   req: IncomingMessage & { body?: unknown; method?: string },
