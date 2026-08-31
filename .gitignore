@@ -26,3 +26,4 @@ dist-ssr
 # 模型 key
 .env
 .env.local
+.vercel
