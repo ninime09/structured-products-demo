@@ -1,0 +1,114 @@
+/* ── 自动演示层 ─────────────────────────────────────────────────────── */
+.demo-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  pointer-events: none;
+}
+
+/* 高亮环：不遮挡、不改变被高亮元素本身，只在它外面画一圈 */
+.demo-spot {
+  position: fixed;
+  border-radius: 12px;
+  border: 2px solid var(--primary);
+  box-shadow:
+    0 0 0 4px rgba(37, 99, 235, .16),
+    0 0 0 9999px rgba(15, 23, 42, .13);
+  transition: opacity .18s ease;
+  pointer-events: none;
+  animation: demo-spot-in .28s ease;
+}
+@keyframes demo-spot-in {
+  from { opacity: 0; transform: scale(.985); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.demo-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  width: min(940px, calc(100vw - 48px));
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 14px 13px 18px;
+  border-radius: 14px;
+  background: rgba(17, 24, 39, .93);
+  backdrop-filter: saturate(180%) blur(14px);
+  box-shadow: 0 18px 44px -16px rgba(15, 23, 42, .55);
+  color: #f9fafb;
+  pointer-events: auto;
+  overflow: hidden;
+}
+.demo-bar.paused { background: rgba(69, 26, 3, .93); }
+
+.demo-progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 2px;
+  background: #60a5fa;
+  transition: width .4s ease;
+}
+
+.demo-bar-inner { flex: 1; min-width: 0; }
+
+.demo-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.demo-count {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: #93c5fd;
+  letter-spacing: .02em;
+}
+.demo-title { color: #e5e7eb; font-weight: 600; }
+.demo-actor {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(147, 197, 253, .16);
+  color: #bfdbfe;
+  font-size: 10.5px;
+}
+.demo-paused-tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, .2);
+  color: #fcd34d;
+  font-size: 10.5px;
+}
+
+.demo-caption {
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: #f9fafb;
+  animation: demo-caption-in .3s ease;
+}
+@keyframes demo-caption-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+.demo-controls { display: flex; gap: 2px; flex-shrink: 0; }
+.demo-controls button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #9ca3af;
+}
+.demo-controls button:hover { background: rgba(255, 255, 255, .1); color: #f9fafb; }
+
+@media (max-width: 900px) {
+  .demo-bar { bottom: 12px; padding: 11px 12px; }
+  .demo-caption { font-size: 13px; }
+}

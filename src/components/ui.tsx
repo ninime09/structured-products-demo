@@ -38,9 +38,11 @@ const STATUS_ZH: Record<string, string> = {
 }
 
 export function StatusBadge({ status }: { status: ArtifactStatus | string }) {
+  // 中文界面上「待审批 · PENDING APPROVAL」是同一句说两遍；
+  // 英文原名留在 title 里，鼠标停上去还能看到
   return (
-    <span className={`badge ${STATUS_TONE[status] ?? 'neutral'}`}>
-      {STATUS_ZH[status] ?? status} · {status}
+    <span className={`badge ${STATUS_TONE[status] ?? 'neutral'}`} title={status}>
+      {STATUS_ZH[status] ?? status}
     </span>
   )
 }
@@ -53,7 +55,6 @@ export function ActionBtn({
   role,
   onClick,
   disabledReason,
-  aiRecommended,
 }: {
   label: string
   kind?: 'primary' | 'secondary' | 'ghost' | 'danger-ghost'
@@ -61,7 +62,6 @@ export function ActionBtn({
   role: RoleKey
   onClick: () => void
   disabledReason?: string
-  aiRecommended?: boolean
 }) {
   const roleOk = allowed.includes(role)
   const disabled = !roleOk || !!disabledReason
@@ -74,7 +74,6 @@ export function ActionBtn({
   return (
     <span className="action-wrap">
       <button className={`btn btn-${kind}`} disabled={disabled} onClick={onClick} title={reason}>
-        {aiRecommended ? <span style={{ fontSize: 10, color: 'var(--ai-accent)' }}>AI 建议</span> : null}
         {label}
       </button>
       {showInline ? <span className="action-reason">{reason}</span> : null}
@@ -82,7 +81,22 @@ export function ActionBtn({
   )
 }
 
-// ── Countdown ────────────────────────────────────────────────────────────
+// ── 报价有效期 ────────────────────────────────────────────────────────
+/**
+ * 访谈口径：接口询价几分钟返回，报价"一般当日有效……当日或者几天内"。
+ * 所以这里不是分钟级倒计时。原来那个秒级 Countdown 会让人以为
+ * 报价随时会失效、执行前必须重新核价——那条流程并不存在。
+ */
+export function Validity({ label = '当日有效', note }: { label?: string; note?: string }) {
+  return (
+    <span className="validity">
+      <b>{label}</b>
+      {note ? <small>{note}</small> : null}
+    </span>
+  )
+}
+
+// ── Countdown（保留给真正需要秒级的场景；当前流程已不使用）────────────
 export function Countdown({ until, now }: { until: number | null; now: number }) {
   if (until === null) return <span className="countdown ok">—</span>
   const left = Math.floor((until - now) / 1000)

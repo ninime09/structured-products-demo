@@ -9,8 +9,6 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
-  CircleAlert,
-  Clock3,
   Database,
   Download,
   FileSearch,
@@ -26,12 +24,77 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { OTHER_CASES, PEOPLE } from '../data'
-import { transitionMeta } from '../config/fcn-pack/workflow'
 import { CaseDetailsPanel } from './Shell'
+import { QuoteMatrixBody } from './StageWorkspaces'
 import { SKILL_MANIFESTS } from '../config/fcn-pack/skills'
+import { dataSourceInventory, inventorySummary, PLANE_LABEL, SYSTEMS } from '../config/fcn-pack/data-sources'
+import type { DataSourceSystem, PlaneUsage } from '../config/fcn-pack/data-sources'
+import { availablePlanes } from '../config/mock-data/planes'
 import { store, useEngine } from '../hooks'
 import type { RoleKey } from '../types'
 import { IconButton, Tag } from './primitives'
+
+/**
+ * 数据源清单。
+ *
+ * 跑完整条流程之后，"真做这个产品要接哪些库"就有答案了——答案不在这一页里手写，
+ * 而是从所有技能的 manifest reads 汇总出来的。改一处声明，这一页跟着变。
+ */
+function DataSourceInventory({ zh }: { zh: boolean }) {
+  const items = dataSourceInventory()
+  const sum = inventorySummary(items)
+  const bySystem = SYSTEMS
+    .map((sys) => ({ sys, planes: items.filter((i) => i.system === sys.key) }))
+    .filter((g) => g.planes.length > 0)
+  const external = bySystem.filter((g) => !g.sys.internal)
+  const internal = bySystem.filter((g) => g.sys.internal)
+
+  const group = (g: { sys: DataSourceSystem; planes: PlaneUsage[] }) => (
+    <section className="dsi-system" key={g.sys.key}>
+      <div className="dsi-system-head">
+        <strong>{g.sys.name}</strong>
+        <span>{g.sys.realWorld}</span>
+      </div>
+      {g.planes.map((p) => (
+        <div className="dsi-plane" key={p.plane}>
+          <code>{p.plane}</code>
+          <span className="dsi-desc">{PLANE_LABEL[p.plane] ?? ''}</span>
+          <span className="dsi-users" title={p.skills.join('、')}>{p.skills.length} 个环节依赖</span>
+          <span className={`dsi-state${p.wired ? ' wired' : ''}`}>{p.wired ? '已接（假数据）' : '未接'}</span>
+        </div>
+      ))}
+    </section>
+  )
+
+  return (
+    <div className="dsi">
+      <div className="dsi-intro">
+        <span><Database size={19} /></span>
+        <div>
+          <strong>{zh ? '真做这个产品，要接哪些数据源' : 'Data sources a real build needs'}</strong>
+          <p>{zh
+            ? 'demo 用的是假数据库。但流程跑通之后，每个环节需要读什么已经明确——下面这份清单由各技能的数据面声明自动汇总，不是手写的。'
+            : 'The demo runs on mock data. What each step needs is now explicit; this list is derived from the skill manifests.'}</p>
+        </div>
+      </div>
+      <div className="dsi-stats">
+        <div><b>{sum.externalSystems}</b><span>{zh ? '个外部系统待对接' : 'external systems'}</span></div>
+        <div><b>{sum.externalPlanes}</b><span>{zh ? '个外部数据面' : 'external planes'}</span></div>
+        <div><b>{sum.totalPlanes - sum.externalPlanes}</b><span>{zh ? '个本系统自产' : 'produced in-house'}</span></div>
+        <div><b>{sum.wired}</b><span>{zh ? '个已接假数据' : 'wired to mock'}</span></div>
+      </div>
+      <div className="dsi-sec">{zh ? '需要对接的外部系统' : 'External systems to integrate'}</div>
+      {external.map(group)}
+      <div className="dsi-sec">{zh ? '本系统自己产出（不需要对接）' : 'Produced by this system'}</div>
+      {internal.map(group)}
+      <div className="dsi-note">
+        {zh
+          ? 'CRM 的客户档案与持仓被最多环节依赖——集中度、历史偏好、拒绝记录都从这里来，是真做时最该先接的两个面。'
+          : 'CRM profile and holdings are the most depended-on planes.'}
+      </div>
+    </div>
+  )
+}
 
 interface SkillDefinition {
   id: string
@@ -46,7 +109,7 @@ const ROLE_LABEL: Record<RoleKey, string> = {
   rm: '客户经理',
   ps: '产品专家',
   dealer: '交易员',
-  ops: '簿记 / 核对',
+  ops: 'Trade Support',
 }
 
 const ROLE_SKILLS: Record<RoleKey, SkillDefinition[]> = {
@@ -176,7 +239,9 @@ export function Drawer() {
     const current = byRole[role]
     return { ...byRole, [role]: current.includes(sourceId) ? current.filter((id) => id !== sourceId) : [...current, sourceId] }
   })
-  const modalTitle = drawer.type === 'source'
+  const modalTitle = drawer.type === 'matrix'
+    ? zh ? '报价矩阵' : 'Quote Matrix'
+    : drawer.type === 'source'
     ? drawer.payload?.title ?? (zh ? '来源证据' : 'Source Evidence')
     : drawer.type === 'case'
       ? zh ? '案例详情' : 'Case Details'
@@ -186,7 +251,9 @@ export function Drawer() {
         ? selectedSkill ? zh ? '技能详情' : 'Skill Details' : zh ? '技能' : 'Skills'
         : drawer.type === 'data'
           ? zh ? '数据权限' : 'Data Access'
-          : zh ? '结构化历史' : 'Structured History'
+          : drawer.type === 'inventory'
+            ? zh ? '数据源清单' : 'Data Sources'
+            : zh ? '结构化历史' : 'Structured History'
 
   const trySkill = (skill: SkillDefinition) => {
     setSelectedSkillId(null)
@@ -198,7 +265,7 @@ export function Drawer() {
   }
 
   const allCases = [
-    { caseId: 'SP-001', name: 'Tencent FCN', status: truth.statusLabel, completed: truth.status === 'COMPLETED' },
+    { caseId: 'SP-001', name: truth.caseName, status: truth.statusLabel, completed: truth.status === 'COMPLETED' },
     ...OTHER_CASES.map((item) => ({ caseId: item.caseId, name: item.name, status: item.statusLabel, completed: false })),
   ]
   const archivedCases = archivedCaseIds
@@ -215,7 +282,15 @@ export function Drawer() {
           <IconButton icon={X} label={`${zh ? '关闭' : 'Close'} ${modalTitle}`} onClick={() => { setSelectedSkillId(null); setArchiveQuery(''); store.closeDrawer() }} />
         </div>
         <div className="drawer-body">
-          {drawer.type === 'case' ? (
+          {drawer.type === 'matrix' ? (
+            /* 上一步那张真矩阵搬进来，底下再挂一句选定依据 */
+            <div className="drawer-matrix-body">
+              <QuoteMatrixBody />
+              {drawer.payload?.body ? (
+                <div className="drawer-matrix-note"><span>{zh ? '选定依据' : 'Basis'}</span><p>{drawer.payload.body}</p></div>
+              ) : null}
+            </div>
+          ) : drawer.type === 'case' ? (
             <div className="drawer-case"><CaseDetailsPanel /></div>
           ) : drawer.type === 'archive' ? (
             <div className="archive-manager">
@@ -247,9 +322,12 @@ export function Drawer() {
                 <div className="emeta">{drawer.payload?.meta}</div>
                 {drawer.payload?.body}
               </div>
-              <p style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6 }}>
-                AI 结论均可追溯到原始输入。此处显示 AI 提取该 Artifact 时引用的原始消息（Layer C 来源以摘要形式提供，不默认展示完整原文）。
-              </p>
+              {/* 这句只对"来源证据"成立；简报之类的其他内容套上去就不对了 */}
+              {drawer.payload?.title?.includes('简报') ? null : (
+                <p style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6 }}>
+                  AI 结论均可追溯到原始输入。此处显示 AI 提取该 Artifact 时引用的原始消息（Layer C 来源以摘要形式提供，不默认展示完整原文）。
+                </p>
+              )}
             </>
           ) : drawer.type === 'skills' ? (
             selectedSkill ? (
@@ -271,10 +349,12 @@ export function Drawer() {
                       {zh ? '治理信息' : 'Governance'} · v{SKILL_MANIFESTS[selectedSkill.id].version} · {zh ? '合规已审批' : 'compliance approved'}（{SKILL_MANIFESTS[selectedSkill.id].approvedBy}）
                     </summary>
                     <div className="skill-manifest-grid">
-                      <div><span>reads</span><code>{SKILL_MANIFESTS[selectedSkill.id].reads.join('  ·  ')}</code><small>{zh ? '默认拒绝，声明即上限' : 'deny by default'}</small></div>
+                      {/* 声明 vs 已接入：manifest 是约束不是说明，看得见才成立 */}
+                      <div><span>reads</span><code className="plane-list">{availablePlanes(selectedSkill.id).map((p) => (
+                        <span key={p.plane} className={p.wired ? 'plane wired' : 'plane'}>{p.plane}{p.wired ? <b title={zh ? '已接入数据面' : 'data plane wired'}>●</b> : <i title={zh ? '已声明，尚未接入' : 'declared, not wired'}>○</i>}</span>
+                      ))}</code><small>{zh ? '默认拒绝，声明即上限；● 已接入 ○ 未接入' : 'deny by default; ● wired ○ declared only'}</small></div>
                       <div><span>writes</span><code>{SKILL_MANIFESTS[selectedSkill.id].writes.join('  ·  ')}</code><small>{zh ? '只出草稿' : 'drafts only'}</small></div>
                       <div><span>can_trigger_transition</span><code className="deny">false</code><small>{zh ? '正式流转必须人确认' : 'formal transitions need human confirmation'}</small></div>
-                      <div><span>eval</span><code>{SKILL_MANIFESTS[selectedSkill.id].evalNote}</code><small>{zh ? '升版本门禁' : 'version gate'}</small></div>
                     </div>
                   </details>
                 ) : null}
@@ -312,6 +392,8 @@ export function Drawer() {
                 </div>
               </div>
             )
+          ) : drawer.type === 'inventory' ? (
+            <DataSourceInventory zh={zh} />
           ) : drawer.type === 'data' ? (
             <div className="data-access-view">
               <div className="data-access-intro"><span><ShieldCheck size={19} /></span><div><strong>{zh ? `${PEOPLE[role].name} 的助手权限` : `${PEOPLE[role].name}'s assistant access`}</strong><p>{zh ? '公司数据遵循职位权限；个人数据只有在员工授权后才会使用。' : 'Company sources follow role permissions. Personal sources are used only after the employee authorizes them.'}</p></div><Tag tone="primary">{ROLE_LABEL[role]}</Tag></div>
@@ -382,109 +464,87 @@ export function ConfirmModal() {
   const { confirm, language } = useEngine()
   const zh = language === 'zh'
   const [acknowledgedKey, setAcknowledgedKey] = useState<string | null>(null)
+  // 渠道选择：默认落在第一条（邮件），因为它自带留痕，是更省事的那条路
+  const [channelKey, setChannelKey] = useState<string | null>(null)
+  const channels = confirm?.channels
+  const channel = channelKey ?? channels?.[0]?.key ?? undefined
   if (!confirm) return null
   const execution = confirm.key === 'executeTrade'
   const needHandoff = confirm.key === 'confirmNeed'
-  const standardAction = !execution && !needHandoff
-  const acknowledged = acknowledgedKey === confirm.key
-  const acceptedGap = acknowledgedKey !== 'need-gap-off'
-  // 状态预览直接查 FCN 流转表（权限、状态、下一负责人的单一来源）。
-  const meta = transitionMeta(confirm.key) ?? { current: 'CURRENT_STATE', next: 'NEXT_STATE', owner: 'Current case owner', label: 'Formal workflow action' }
+  // 这一步要不要人明确背书。只有这两处：需求共创的结论、代客下单。
+  const mustAck = execution || needHandoff
+  const acked = execution ? acknowledgedKey === confirm.key : acknowledgedKey !== 'need-gap-off'
   return (
     <div className="modal-mask" onClick={() => store.cancelConfirm()}>
-      <div className={`modal${execution ? ' execution-confirm' : needHandoff ? ' need-confirm' : standardAction ? ' standard-confirm' : ''}`} onClick={(e) => e.stopPropagation()}>
-        <div className="confirm-title-row">
-          <div>
-            <div className="m-title">{confirm.title}</div>
-            {execution ? <div className="confirm-subtitle">{zh ? '创建正式执行事件前，由交易员进行最终审核。' : 'Final dealer review before a formal execution event is created.'}</div> : null}
-            {needHandoff ? <div className="confirm-subtitle">{zh ? '这将批准客户需求摘要，并把结构设计移交给 David。' : 'This will approve the Client Need Brief and hand off structuring to David.'}</div> : null}
-            {standardAction ? <div className="confirm-subtitle">{zh ? '确认前请检查准备执行的操作及其案例状态变化。' : 'Review the prepared action and resulting case state before confirming.'}</div> : null}
-          </div>
-          {execution ? <Tag tone="critical">{zh ? '正式操作' : 'Formal action'}</Tag> : null}
-          {needHandoff ? <Tag tone="primary">{zh ? '状态流转' : 'State transition'}</Tag> : null}
-          {standardAction ? <Tag tone={confirm.danger ? 'warning' : 'primary'}>{zh ? '正式流程操作' : 'Formal workflow action'}</Tag> : null}
+      <div className="modal confirm-lite" onClick={(e) => e.stopPropagation()}>
+        <div className="cl-head">
+          <div className="m-title">{confirm.title}</div>
           <IconButton icon={X} label={zh ? '关闭确认弹窗' : 'Close confirmation'} onClick={() => store.cancelConfirm()} />
         </div>
-        {execution ? (
-          <div className="execution-confirm-validity">
-            <Clock3 size={17} />
-            <span><strong>Issuer quote still valid</strong>Morgan Stanley live quote · received 14:41</span>
-            <strong className="confirm-countdown">01:42</strong>
+
+        {/* 这一步做什么 —— 一句话，不重复卡面上已有的信息 */}
+        <p className="cl-what">{confirm.consequence}</p>
+
+        {/* 对外发出的文书：正文全文摆出来，人看到什么才算审过什么 */}
+        {confirm.preview ? (
+          <div className="cl-preview">
+            <div className="cl-preview-label">{confirm.preview.label}</div>
+            <pre>{confirm.preview.body}</pre>
           </div>
         ) : null}
-        {needHandoff ? (
-          <>
-            <div className="need-confirm-section-label">{zh ? '待批准摘要' : 'Approved summary'}</div>
-            <div className="need-confirm-summary">
-              <div><span>{zh ? '标的' : 'Underlying'}</span><strong>Tencent / 0700.HK</strong></div><div><span>{zh ? '名义本金' : 'Notional'}</span><strong>USD 1,000,000</strong></div><div><span>{zh ? '期限' : 'Horizon'}</span><strong>~6M</strong></div><div><span>{zh ? '目标收益' : 'Target'}</span><strong>&gt;10% p.a.</strong></div><div><span>{zh ? '风险' : 'Risk'}</span><strong>{zh ? '中等' : 'Moderate'}</strong></div><div><span>{zh ? '观点' : 'View'}</span><strong>{zh ? '看好' : 'Bullish'}</strong></div><div><span>{zh ? '客户分级' : 'Classification'}</span><strong>{zh ? '个人 PI · C4' : 'Individual PI · C4'}</strong></div>
-            </div>
-            <div className="need-confirm-evidence"><CheckCircle2 size={16} /><strong>{zh ? '5 个字段经邮件证据核实 · 客户分级来自 CRM 档案 · 适当性预检通过（FCN·R4 ≤ C4）' : '5 fields verified from email · classification from CRM profile · suitability pre-check passed (FCN R4 ≤ C4)'}</strong><button>{zh ? '查看字段证据' : 'View field evidence'}</button></div>
-            <div className="need-confirm-gap">
-              <CircleAlert size={17} /><div><strong>{zh ? '流动性偏好缺失' : 'Liquidity Preference Missing'}</strong><span>{zh ? '客户未说明流动性偏好，确认后将记录为已接受的缺失项。' : 'Client did not specify liquidity preference. Confirming will record this as an accepted gap.'}</span><label><input type="checkbox" checked={acceptedGap} onChange={(event) => setAcknowledgedKey(event.target.checked ? null : 'need-gap-off')} />{zh ? '记录为已接受的缺失项' : 'Record as accepted gap'} <small>({zh ? '必选' : 'Required'})</small></label></div>
-            </div>
-            <div className="need-confirm-coverage"><span><CheckCircle2 size={14} />{zh ? '已提取 7 项' : '7 extracted'}</span><span><CheckCircle2 size={14} />{zh ? '已核实 6 项' : '6 verified'}</span><span className="warning"><CircleAlert size={14} />{zh ? '1 项待处理缺失' : '1 unresolved gap'}</span><small>{zh ? '来源：Mr. Chan 的邮件 · 14:02 + CRM 客户档案' : 'Source: Email from Mr. Chan · 14:02 + CRM profile'}</small></div>
-            <div className="need-next-state"><div className="need-confirm-section-label">{zh ? '下一状态预览' : 'Next state preview'}</div><div><Tag>CLIENT_NEED_DRAFT</Tag><b>→</b><Tag tone="primary">CLIENT_NEED_APPROVED</Tag></div><p><span>{zh ? '下一负责人' : 'Next owner'}</span><strong>David · Product Specialist</strong></p><p><span>{zh ? '下一步操作' : 'Next action'}</span><strong>{zh ? '设计结构方案' : 'Design structure proposal'}</strong></p></div>
-          </>
-        ) : execution ? <div className="m-summary">
-          <div className="ms-head">你正在确认</div>
-          {confirm.summary.map((s) => (
-            <div className="ms-row" key={s}>
-              {s}
-            </div>
-          ))}
-        </div> : (
-          <div className="standard-confirm-body">
-            <div className="standard-action-overview"><span>Prepared action</span><strong>{meta.label}</strong><p>{confirm.consequence}</p></div>
-            <div className="standard-confirm-section"><span>Review summary</span><div>{confirm.summary.map((item) => <p key={item}><CheckCircle2 size={14} /><strong>{item}</strong></p>)}</div></div>
-            <div className={`standard-impact ${confirm.danger ? 'warning' : ''}`}><CircleAlert size={16} /><div><span>Workflow impact</span><strong>{confirm.danger ? 'This action changes or routes the current workflow.' : 'This action creates an auditable state transition.'}</strong></div></div>
-            <div className="standard-state-preview"><div><span>Current state</span><strong>{meta.current}</strong></div><b>→</b><div><span>Next state</span><strong>{meta.next}</strong></div><div><span>Next owner</span><strong>{meta.owner}</strong></div></div>
-          </div>
-        )}
+
+        {/* 代客下单是最高风险的一步，执行前控制项保留 */}
         {execution ? (
-          <div className="confirm-checks">
-            <div><CheckCircle2 size={15} /><span><strong>Client instruction confirmed</strong>Alice · RM · 14:38</span></div>
-            <div><CheckCircle2 size={15} /><span><strong>Ticket matches approved terms</strong>Notional, issuer, strike, KI and coupon aligned</span></div>
-            <div><CheckCircle2 size={15} /><span><strong>Booking fields complete</strong>Settlement and account routing ready</span></div>
+          <ul className="cl-checks">
+            <li><CheckCircle2 size={14} />{zh ? '客户指令已确认 · Alice · 14:38' : 'Client instruction confirmed'}</li>
+            <li><CheckCircle2 size={14} />{zh ? '指令与已批准条款一致' : 'Instruction matches approved terms'}</li>
+            <li><CheckCircle2 size={14} />{zh ? '对客票息已锁死，上手成交价回报时才定' : 'Client coupon locked'}</li>
+          </ul>
+        ) : null}
+
+        {/* 走哪条渠道给客户——决定了之后怎么留痕 */}
+        {channels?.length ? (
+          <div className="cl-channels">
+            {channels.map((c) => (
+              <button
+                key={c.key}
+                className={`cl-channel${channel === c.key ? ' on' : ''}`}
+                onClick={() => setChannelKey(c.key)}
+              >
+                <span className="cl-channel-mark" />
+                <div><strong>{c.label}</strong><small>{c.detail}</small></div>
+              </button>
+            ))}
           </div>
         ) : null}
-        {execution ? <div className="m-consequence"><CircleAlert size={16} /><span>{confirm.consequence}</span></div> : null}
-        {execution ? (
-          <label className="execution-ack">
-            <input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledgedKey(event.target.checked ? confirm.key : null)} />
-            <span>I have reviewed the final live terms and intend to execute this trade.</span>
+
+        {/* 必须由人背书的那一条 */}
+        {mustAck ? (
+          <label className={`cl-ack${acked ? ' on' : ''}`}>
+            <input
+              type="checkbox"
+              checked={acked}
+              onChange={(e) => {
+                if (execution) setAcknowledgedKey(e.target.checked ? confirm.key : null)
+                else setAcknowledgedKey(e.target.checked ? null : 'need-gap-off')
+              }}
+            />
+            <span>{confirm.ack ?? (execution
+              ? zh ? '我已复核最终条款，确认代客下单' : 'I have reviewed the final terms'
+              : zh ? '标的与流动性是共创结论、非客户邮件原文，已与客户核对' : 'Joint conclusion checked with the client')}</span>
           </label>
         ) : null}
-        {execution ? (
-          <div className="confirm-state-preview">
-            <div><span>Current state</span><strong>EXECUTION_READY</strong></div>
-            <span className="confirm-state-arrow">→</span>
-            <div><span>After execution</span><strong>EXECUTED</strong></div>
-            <div className="confirm-state-owner"><span>Next owner</span><strong>Operations · Term sheet validation</strong></div>
-          </div>
-        ) : null}
+
         <div className="m-actions">
-          <button className="btn btn-ghost" onClick={() => store.cancelConfirm()}>
-            {execution ? zh ? '返回执行单' : 'Back to Ticket' : needHandoff || standardAction ? zh ? '返回审核' : 'Back to Review' : '取消'}
-          </button>
-          {needHandoff ? <button className="btn btn-secondary" onClick={() => store.cancelConfirm()}>{zh ? '编辑摘要' : 'Edit Brief'}</button> : null}
-          {execution ? (
-            <button className="btn btn-secondary" onClick={() => {
-              store.cancelConfirm()
-              requestAnimationFrame(() => store.requestConfirm({
-                key: 'requestLiveRequote',
-                title: 'Request Live Requote',
-                summary: ['Request a fresh executable quote from Morgan Stanley', 'Refresh the execution ticket before submission'],
-                consequence: 'The trade remains blocked until Dealer reviews a valid live quote.',
-                confirmLabel: 'Request live requote',
-              }))
-            }}>Request Live Requote</button>
-          ) : null}
+          <button className="btn btn-ghost" onClick={() => store.cancelConfirm()}>{zh ? '取消' : 'Cancel'}</button>
           <button
             className={`btn ${confirm.danger ? 'btn-danger-ghost' : 'btn-primary'}`}
-            disabled={(execution && !acknowledged) || (needHandoff && !acceptedGap)}
-            onClick={() => store.executeConfirmed()}
+            disabled={mustAck && !acked}
+            onClick={() => store.executeConfirmed(channel)}
           >
-            {needHandoff ? zh ? '确认并移交' : 'Confirm & Hand Off' : confirm.confirmLabel}
+            {needHandoff ? zh ? '确认并移交' : 'Confirm & Hand Off' : channels?.length
+              ? channels.find((c) => c.key === channel)?.label ?? confirm.confirmLabel
+              : confirm.confirmLabel}
           </button>
         </div>
       </div>

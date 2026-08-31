@@ -4,14 +4,14 @@ export const PEOPLE: Record<RoleKey, Person> = {
   rm: { name: 'Alice', role: 'rm', roleLabel: 'RM · 客户经理', initials: 'AL' },
   ps: { name: 'David', role: 'ps', roleLabel: '产品专家', initials: 'DV' },
   dealer: { name: 'Ken', role: 'dealer', roleLabel: '内部交易员', initials: 'KE' },
-  ops: { name: 'Mia', role: 'ops', roleLabel: '簿记 / 核对', initials: 'MI' },
+  ops: { name: 'Mia', role: 'ops', roleLabel: 'Trade Support', initials: 'MI' },
 }
 
 export const ROLE_SHORT: Record<RoleKey, string> = {
   rm: '客户经理',
   ps: '产品专家',
   dealer: '交易员',
-  ops: '簿记 / 核对',
+  ops: 'Trade Support',
 }
 
 // 可拉入协作的同事：各有擅长，可参与讨论；不占四个正式审批角色。
@@ -34,7 +34,7 @@ export const OTHER_CASES: MiniCase[] = [
     waitingOn: '客户',
     nextAction: '跟进客户对报价的反馈',
     reason: '客户报价卡已发送 2 天，客户尚未回复',
-    deadline: '报价有效至明日 12:00',
+    deadline: '报价已发出 2 天，需跟进',
     priority: 'medium',
     attention: null,
   },
@@ -42,14 +42,14 @@ export const OTHER_CASES: MiniCase[] = [
     caseId: 'SP-003',
     name: 'Alibaba FCN',
     stageLabel: '定价',
-    statusLabel: '报价即将过期',
+    statusLabel: '需当日决策',
     tone: 'warning',
     ownerRole: 'dealer',
     ownerName: 'Ken',
     waitingOn: '—',
-    nextAction: '在报价过期前决定：准备客户报价或请求重报',
-    reason: 'GS 最优报价 4 分钟后过期',
-    deadline: '04:00 后过期',
+    nextAction: '今日内决定：准备客户报价或请求重报',
+    reason: '报价当日有效，跨日未成交需重新询价',
+    deadline: '今日收市前',
     priority: 'high',
     attention: 'warning',
   },
@@ -88,7 +88,7 @@ export const OTHER_CASES: MiniCase[] = [
 export const ASSISTANT_CHIPS = [
   '今天哪个 Case 最紧急？',
   'SP-001 现在卡在哪一步？',
-  '有哪些报价快过期？',
+  '有哪些报价今日需决策？',
 ]
 
 export function assistantReply(question: string, sp001Status: string, sp001Next: string): string[] {
@@ -99,16 +99,16 @@ export function assistantReply(question: string, sp001Status: string, sp001Next:
       '依据：Case State（非聊天记录汇总），可在 Trade Room 右栏核对。',
     ]
   }
-  if (question.includes('过期')) {
+  if (question.includes('过期') || question.includes('决策')) {
     return [
-      'SP-003 · Alibaba FCN：GS 最优报价约 4 分钟后过期，Ken 需要在过期前决定重报或准备客户报价。',
-      'SP-002 · AAPL Autocall：客户报价有效至明日 12:00，暂不紧急。',
+      'SP-003 · Alibaba FCN：报价当日有效，今日未成交需重新询价，Ken 需在收市前决定。',
+      'SP-002 · AAPL Autocall：客户报价已发出 2 天未回复，建议跟进。',
     ]
   }
   return [
     '按优先级排序，当前最需要处理的是：',
     '1. SP-005 · Basket Note — Termsheet mismatch（Exception），需要产品专家处理。',
-    '2. SP-003 · Alibaba FCN — GS 报价 4 分钟后过期，Dealer 需尽快决策。',
+    '2. SP-003 · Alibaba FCN — 报价当日有效，Dealer 需在收市前决策。',
     `3. SP-001 · Tencent FCN — ${sp001Next}`,
   ]
 }
