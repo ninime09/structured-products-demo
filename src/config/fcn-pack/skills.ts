@@ -1,6 +1,9 @@
 // 技能插件 manifest：插件的"身份证 + 权限申请表"。
 // 展示层的名称/示例在 Overlays 的技能定义里；这里是治理元数据：
-// 能读什么、能产出什么、版本、审批人、评测——注册表审批看的就是这张表。
+// 能读什么、能产出什么、版本、审批人——注册表审批看的就是这张表。
+//
+// reads 的另一重用途：把所有技能的声明汇总起来，就是「真做这个产品要接哪些库」
+// 的清单（数据源面板用的就是它）。
 
 export interface SkillManifest {
   id: string
@@ -12,8 +15,6 @@ export interface SkillManifest {
   writes: string[]
   /** 技能永远不能自行触发正式流转 */
   canTriggerTransition: false
-  /** 金标集回归结果（升版本门禁） */
-  evalNote: string
 }
 
 const M = (
@@ -21,23 +22,30 @@ const M = (
   version: string,
   reads: string[],
   writes: string[],
-  evalNote: string,
-): SkillManifest => ({ id, version, approvedBy: '合规 · Ashley', reads, writes, canTriggerTransition: false, evalNote })
+): SkillManifest => ({ id, version, approvedBy: '合规 · Ashley', reads, writes, canTriggerTransition: false })
 
 export const SKILL_MANIFESTS: Record<string, SkillManifest> = {
-  'client-need-extraction': M('client-need-extraction', '1.3', ['email', 'crm.client_profile'], ['artifact.need_brief'], '金标集 47/47 通过'),
-  'client-follow-up': M('client-follow-up', '1.1', ['case.timeline', 'artifact.client_quote'], ['draft.client_message'], '金标集 32/33 通过'),
-  'case-prioritization': M('case-prioritization', '1.0', ['case.state', 'case.deadlines'], ['view.priority_list'], '规则型 · 无需回归'),
-  'structure-comparator': M('structure-comparator', '2.0', ['artifact.need_brief', 'catalog.products'], ['artifact.structure_proposal'], '金标集 21/21 通过'),
-  'suitability-review': M('suitability-review', '1.2', ['crm.client_profile', 'artifact.structure_proposal'], ['check.suitability'], '策略绑定 · 合规维护'),
-  'structure-stress-test': M('structure-stress-test', '0.9', ['artifact.structure_proposal', 'market.scenarios'], ['report.stress_test'], '试点中'),
-  'rfq-packager': M('rfq-packager', '1.4', ['artifact.structure_approved'], ['artifact.rfq_package'], '金标集 18/18 通过'),
-  'quote-normalizer': M('quote-normalizer', '1.6', ['connector.pricing_api.responses'], ['artifact.quote_matrix'], '金标集 40/41 通过'),
-  'execution-precheck': M('execution-precheck', '1.0', ['artifact.quote_matrix', 'artifact.instruction'], ['check.freshness'], '规则型 · 无需回归'),
-  'termsheet-validation': M('termsheet-validation', '1.5', ['artifact.execution_ticket', 'doc.final_termsheet'], ['artifact.ts_validation'], '金标集 25/26 通过（错例已入集）'),
-  'booking-readiness': M('booking-readiness', '1.1', ['artifact.execution_ticket', 'connector.booking'], ['check.booking_fields'], '金标集 15/15 通过'),
-  'exception-routing': M('exception-routing', '1.0', ['artifact.ts_validation'], ['ticket.issuer_exception'], '规则型 · 无需回归'),
-  'document-translation': M('document-translation', '2.1', ['doc.attached'], ['doc.translated'], '术语表回归通过'),
-  'knowledge-search': M('knowledge-search', '1.8', ['kb.approved'], ['answer.cited'], '引用率评测通过'),
-  'meeting-brief': M('meeting-brief', '1.0', ['case.state', 'calendar.events'], ['draft.brief'], '金标集 12/12 通过'),
+  'client-need-extraction': M('client-need-extraction', '1.4', ['email', 'crm.client_profile'], ['artifact.need_brief']),
+  'client-follow-up': M('client-follow-up', '1.1', ['case.timeline', 'artifact.client_quote'], ['draft.client_message']),
+  'case-prioritization': M('case-prioritization', '1.0', ['case.state', 'case.deadlines'], ['view.priority_list']),
+  // 2.1 起加读 crm.holdings：集中度是可算的硬约束，没有持仓就只能给泛泛建议。
+  // 这行声明不是装饰——技能能读到什么，直接决定初稿的推导质量。
+  'structure-comparator': M('structure-comparator', '2.2', ['artifact.need_brief', 'crm.client_profile', 'crm.holdings', 'catalog.products', 'market.snapshot'], ['artifact.structure_proposal']),
+  'suitability-review': M('suitability-review', '1.3', ['crm.client_profile', 'crm.holdings', 'artifact.structure_proposal'], ['check.suitability']),
+  // 需求书记员：从交易室讨论里提字段更新。只读客户侧，够它核对讨论里说的数对不对；
+  // 写的是草稿字段，最终仍由「确认客户需求」那一步整体把关。
+  'need-extractor': M('need-extractor', '1.0', ['case.timeline', 'crm.client_profile', 'crm.holdings'], ['draft.need_fields']),
+  // 私区应答：要回答"这个方向为什么不行"这类问题，得能读到算依据的那几个面。
+  // 它 writes 的只有草稿——发布仍是人点，manifest 里也没有 transition 权限。
+  'trade-room-copilot': M('trade-room-copilot', '1.0', ['case.timeline', 'crm.client_profile', 'crm.holdings', 'catalog.products', 'market.snapshot'], ['draft.private_reply', 'draft.client_message']),
+  'structure-stress-test': M('structure-stress-test', '0.9', ['artifact.structure_proposal', 'market.scenarios'], ['report.stress_test']),
+  'rfq-packager': M('rfq-packager', '1.4', ['artifact.structure_approved'], ['artifact.rfq_package']),
+  'quote-normalizer': M('quote-normalizer', '1.6', ['connector.pricing_api.responses'], ['artifact.quote_matrix']),
+  'execution-precheck': M('execution-precheck', '1.0', ['artifact.quote_matrix', 'artifact.instruction'], ['check.freshness']),
+  'termsheet-validation': M('termsheet-validation', '1.5', ['artifact.execution_ticket', 'doc.final_termsheet'], ['artifact.ts_validation']),
+  'booking-readiness': M('booking-readiness', '1.1', ['artifact.execution_ticket', 'connector.booking'], ['check.booking_fields']),
+  'exception-routing': M('exception-routing', '1.0', ['artifact.ts_validation'], ['ticket.issuer_exception']),
+  'document-translation': M('document-translation', '2.1', ['doc.attached'], ['doc.translated']),
+  'knowledge-search': M('knowledge-search', '1.8', ['kb.approved'], ['answer.cited']),
+  'meeting-brief': M('meeting-brief', '1.0', ['case.state', 'calendar.events'], ['draft.brief']),
 }

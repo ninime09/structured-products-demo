@@ -23,10 +23,23 @@ export interface TransitionRule {
 }
 
 export const FCN_WORKFLOW: Record<string, TransitionRule> = {
-  confirmNeed: {
-    auditAction: 'Confirm Client Need',
-    metaLabel: 'Client need approval',
+  // 客户给的往往是收益范围 / 风险承受 / 期限，不一定指定标的与结构。
+  // 需求必须由 RM 与产品专家共同与客户界定，产品专家不是"需求定稿后才接手"。
+  inviteSpecialist: {
+    auditAction: 'Invite Product Specialist（需求共创）',
+    metaLabel: 'Invite product specialist',
     from: 'CLIENT_NEED_DRAFT',
+    to: 'CLIENT_NEED_JOINT_REVIEW',
+    toLabel: '需求共创中',
+    toTone: 'progress',
+    // 阶段与负责人都不变：客户关系仍在 RM 手上，产品专家是共创者不是接手人。
+    ownerLabel: 'Alice · RM + David · 产品专家',
+    allowedRoles: ['rm'],
+  },
+  confirmNeed: {
+    auditAction: 'Confirm Client Need（RM + 产品专家共同确认）',
+    metaLabel: 'Client need approval',
+    from: 'CLIENT_NEED_JOINT_REVIEW',
     to: 'CLIENT_NEED_APPROVED',
     toLabel: '客户需求已确认',
     toTone: 'success',
@@ -149,27 +162,45 @@ export const FCN_WORKFLOW: Record<string, TransitionRule> = {
     ownerLabel: 'Ken · Dealer',
     allowedRoles: ['rm'],
   },
-  requestLiveRequote: {
-    auditAction: 'Request Live Requote',
-    metaLabel: 'Request live executable quote',
-    from: 'LIVE_REQUOTE_REQUIRED',
-    to: 'LIVE_REQUOTE_REQUIRED',
-    toLabel: '需要实时重报',
-    toTone: 'warning',
-    ownerLabel: 'Ken · Dealer',
-    allowedRoles: ['dealer'],
-  },
+  // 场外产品不走接口：交易员代客户向上手方发出下单指令。
+  // 对客条款在客户确认时已锁死，这里不再刷新价格——刷了也不会改对客承诺。
   executeTrade: {
-    auditAction: 'Confirm & Execute',
+    auditAction: 'Place Order with Issuer（代客下单 · 指令形式）',
     metaLabel: 'Formal execution',
     from: 'EXECUTION_READY',
     to: 'EXECUTED',
-    toLabel: '已执行',
+    toLabel: '已下单',
     toTone: 'success',
+    ownerLabel: 'Ken · Dealer',
+    allowedRoles: ['dealer'],
+  },
+  // 交易员核对上手方成交确认邮件的抽取结果并登记。
+  // 这一关不能省：可比对的要素系统能自动核平，但成交票息内部无可比对象——
+  // 只有他知道自己成交在哪个价，也只有他签了字，这条记录才有归属。
+  confirmTradeRecord: {
+    auditAction: 'Confirm Trade Record（成交要素登记）',
+    metaLabel: 'Trade record',
+    from: 'TRADE_RECORD_REVIEW',
+    to: 'BOOKING_REVIEW',
+    toLabel: '待簿记录入',
+    toTone: 'warning',
+    stage: 'execution',
+    owner: 'ops',
+    ownerLabel: 'Ken · Dealer',
+    allowedRoles: ['dealer'],
+  },
+  // Trade Support 从交易登记记录录入簿记，再与发行商条款书三方核对
+  confirmBooking: {
+    auditAction: 'Confirm Booking Entry（簿记录入）',
+    metaLabel: 'Booking entry',
+    from: 'BOOKING_REVIEW',
+    to: 'TERMSHEET_REVIEW',
+    toLabel: '条款书待核对',
+    toTone: 'warning',
     stage: 'termsheet',
     owner: 'ops',
-    ownerLabel: 'Mia · Operations',
-    allowedRoles: ['dealer'],
+    ownerLabel: 'Mia · Trade Support',
+    allowedRoles: ['ops'],
   },
   raiseException: {
     auditAction: 'Raise Exception（Settlement mismatch）',
@@ -206,8 +237,9 @@ export const FCN_WORKFLOW: Record<string, TransitionRule> = {
 }
 
 /** 确认弹窗用的状态预览，全部查表，不再手工维护第二份。 */
-export function transitionMeta(key: string): { current: string; next: string; owner: string; label: string } | null {
+export function transitionMeta(key: string): { current: string; next: string; nextLabel: string; owner: string; label: string } | null {
   const rule = FCN_WORKFLOW[key]
   if (!rule) return null
-  return { current: rule.from, next: rule.to, owner: rule.ownerLabel, label: rule.metaLabel }
+  // nextLabel 是人话（"客户需求已确认"），next 是状态机内部名——确认弹窗上给人看的用前者
+  return { current: rule.from, next: rule.to, nextLabel: rule.toLabel, owner: rule.ownerLabel, label: rule.metaLabel }
 }
