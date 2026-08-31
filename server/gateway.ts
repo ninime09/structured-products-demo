@@ -90,10 +90,21 @@ export interface GatewayRequest {
   timeoutMs?: number
 }
 
-export async function handleLlm(req: IncomingMessage, res: ServerResponse, env: Record<string, string>) {
+/**
+ * @param preParsed 运行时已经替你读过 body 时传进来（Vercel Node Function 会
+ *   把 JSON body 解析成 req.body）。流已经被消费掉了，再 readBody 会一直挂着。
+ */
+export async function handleLlm(
+  req: IncomingMessage,
+  res: ServerResponse,
+  env: Record<string, string>,
+  preParsed?: unknown,
+) {
   let payload: GatewayRequest
   try {
-    payload = JSON.parse(await readBody(req))
+    payload = (preParsed === undefined
+      ? JSON.parse(await readBody(req))
+      : typeof preParsed === 'string' ? JSON.parse(preParsed) : preParsed) as GatewayRequest
   } catch {
     return json(res, 400, { error: 'invalid json body' })
   }
